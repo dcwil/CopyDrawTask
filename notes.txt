@@ -1,0 +1,15 @@
+
+
+#### Todo  #####
+
+- Interpolate the trace (3rd order poly or splines)
+- replicate saving format
+- write scoring function
+- record scaling factor (from trace to norm units)
+- draw the box (use any of the vertices)
+- when n_trials > number of trials in the file, show repeat trials but randomise and stratify
+- save data in pixel units
+- save some overarching info: total len, path length, speed etc (check matlab, pd_interaktiv)
+- add in ability to draw broken lines (when finishWhenRaise == False)
+- put in RGB colour values
+- create a YAML for repo
