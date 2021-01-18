@@ -103,7 +103,7 @@ class CopyDraw(AbstractParadigm):
                  lpt_address = None,
                  serial_nr = None,
                  manyshape=True, #new or old rendering
-                 interp = {'s':0.001,'n_interp':500}, #dict of values or None
+                 interp ={'s':0.001,'n_interp':500}, #dict of values or None
                  old_template_path='../CopyDraw_mat_repo/CopyDrawTask-master/templates/shapes'):
         super().__init__(screen_ix=screen_ix, lpt_address=lpt_address,
                          serial_nr=serial_nr)
@@ -221,7 +221,7 @@ class CopyDraw(AbstractParadigm):
         print('stimuli loaded')
         
         
-    def get_stimuli(self, stimuli_idx,scale=True,interp=True): #how will n_trials > len(templates) work? stratify and randomise
+    def get_stimuli(self, stimuli_idx,scale=True): #how will n_trials > len(templates) work? stratify and randomise
         #easier to ask forgiveness than permission!
         try:
             self.current_stimulus = self.templates[stimuli_idx].astype(float)
@@ -250,7 +250,7 @@ class CopyDraw(AbstractParadigm):
                     
                     
                     
-            if interp is not None:
+            if self.interp is not None:
                 tck, u = splprep(self.current_stimulus.T, s=self.interp['s'])
                 
                 
