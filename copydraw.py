@@ -18,6 +18,8 @@ from numpy.linalg import norm
 from pathlib import Path
 from itertools import permutations
 
+from scipy.interpolate import splprep, splev
+
 logger = logging.getLogger('CopyDraw')
 #logger.setLevel(logging.DEBUG)
 
@@ -100,6 +102,8 @@ class CopyDraw(AbstractParadigm):
                  flip=True,
                  lpt_address = None,
                  serial_nr = None,
+                 manyshape=True, #new or old rendering
+                 interp = {'s':0.001,'n_interp':500}, #dict of values or None
                  old_template_path='../CopyDraw_mat_repo/CopyDrawTask-master/templates/shapes'):
         super().__init__(screen_ix=screen_ix, lpt_address=lpt_address,
                          serial_nr=serial_nr)
@@ -115,6 +119,8 @@ class CopyDraw(AbstractParadigm):
         self.trial_clock = core.Clock() # use this!
         self.flip=flip
         self.old_template_path = old_template_path
+        self.manyshape = manyshape
+        self.interp = interp
         print('initialised')
         
         
@@ -215,7 +221,7 @@ class CopyDraw(AbstractParadigm):
         print('stimuli loaded')
         
         
-    def get_stimuli(self, stimuli_idx,scale=True):
+    def get_stimuli(self, stimuli_idx,scale=True,interp=True): #how will n_trials > len(templates) work? stratify and randomise
         #easier to ask forgiveness than permission!
         try:
             self.current_stimulus = self.templates[stimuli_idx].astype(float)
@@ -223,9 +229,9 @@ class CopyDraw(AbstractParadigm):
 
             
             if scale:
-                for i in range(2):
+                for i in range(2): #do this with a single matrix!
                     
-                    #scale the box first
+                    #scale the box first - needs to be scaled by the same factor as the stim right?
                     self.theBox[:,i] -= np.min(self.theBox[:,i])
                     self.theBox[:,i] /= np.max(self.theBox[:,i])
                     
@@ -243,6 +249,20 @@ class CopyDraw(AbstractParadigm):
                     self.theBox = np.matmul(self.theBox, np.array([[1,0],[0,-1]]))
                     
                     
+                    
+            if interp is not None:
+                tck, u = splprep(self.current_stimulus.T, s=self.interp['s'])
+                
+                
+                ### using a high value for n_interp along with manyshape == True
+                ### results in laggy performance
+                
+                u_new = np.linspace(np.min(u), np.max(u), self.interp['n_interp'])
+                self.current_stimulus = np.array(splev(u_new, tck)).T
+                # note this is replacing the original points, not adding
+                
+                
+                
             return self.current_stimulus
         
         except AttributeError:
@@ -267,33 +287,34 @@ class CopyDraw(AbstractParadigm):
         print('executing trial')
         
         ## old style render or new?
-        
-        # self.template_stim = visual.ShapeStim(win=self.win,
-        #                     vertices=self.get_stimuli(stimuli_idx,scale=scale),
-        #                     lineWidth=20,
-        #                     closeShape=False,
-        #                     interpolate=True,
-        #                     ori=0,
-        #                     pos=(0,0),
-        #                     size=1.5,
-        #                     units='norm',
-        #                     fillColor='blue',
-        #                     lineColor='blue',
-        #                     #windingRule=True,
-        #                     )
-        manyshape_size = 0.03
-        self.template_stim = ManyShapeStim(self.get_stimuli(stimuli_idx,scale=scale),
-                                           visual.Circle,
-                                           {'win':self.win,
-                                            'units':'norm',
-                                            'size':(manyshape_size,manyshape_size*self.aspect_ratio),
-                                            'color':'blue',
-                                            'fillColor':'blue',
-                                            'lineColor':'blue'
-                                            },
-                                           size=1.5)
+        if self.manyshape:
+            #seems like the only way to get thicker lines
+            manyshape_size = 0.02
+            self.template_stim = ManyShapeStim(self.get_stimuli(stimuli_idx,scale=scale),
+                                                visual.Circle,
+                                                {'win':self.win,
+                                                'units':'norm',
+                                                'size':(manyshape_size,manyshape_size*self.aspect_ratio),
+                                                'color':'blue',
+                                                'fillColor':'blue',
+                                                'lineColor':'blue'
+                                                },
+                                                size=1.5)
+        else:
+            self.template_stim = visual.ShapeStim(win=self.win,
+                    vertices=self.get_stimuli(stimuli_idx,scale=scale),
+                    lineWidth=100, # seems to top out after like 10 or 20: https://github.com/psychopy/psychopy/issues/818
+                    closeShape=False,
+                    interpolate=True,
+                    ori=0,
+                    pos=(0,0),
+                    size=1.5,
+                    units='norm',
+                    fillColor='blue',
+                    lineColor='blue',
+                    #windingRule=True,
+                    )
 
-        
         
         
         
@@ -346,7 +367,7 @@ class CopyDraw(AbstractParadigm):
                       size=(1,0.025),
                       fillColor='gray')
         
-        #calc timebar shrinking vals
+        #calc timebar shrinking vals ## is  there a better way to do this
         trial_dur_frames = math.ceil(self.letter_time / (self.msperframe/10**3))
         print(f'there will be {trial_dur_frames} in {self.letter_time}')
         timebar_x = self.timebar.size[0]
@@ -366,7 +387,8 @@ class CopyDraw(AbstractParadigm):
         while main_loop == True:
             
         
-            
+            # maybe theres a way to reduce all these draw calls, pack into func perhaps?
+            ### draw_except() <- draws all shapes except those passed in by name?
             self.template_stim.draw()
             self.startpoint.draw()
             self.cursor.draw()
@@ -374,7 +396,7 @@ class CopyDraw(AbstractParadigm):
             #self.box.draw()
             self.trial_number.draw()
             
-            if self.startpoint.fillColor != 'Cyan': 
+            if self.startpoint.fillColor != 'Cyan': #only show instructions if startpoint not clicked
                 self.instructions.draw()
             
             self.win.flip()
@@ -382,6 +404,7 @@ class CopyDraw(AbstractParadigm):
             if self.mouse.isPressedIn(self.startpoint): #click in startpoint
                 self.startpoint.fillColor = 'Cyan'
                 #turned_cyan = True
+                
                 #self.instructions.draw()
                 self.template_stim.draw()
                 self.startpoint.draw()
@@ -410,6 +433,7 @@ class CopyDraw(AbstractParadigm):
                         
                         mouse_pos.append(self.mouse.getPos())
                         #mouse_pos_pix.append(posToPix(mouse))
+                        
                         self.timebar.draw()
                         #self.instructions.draw()
                         self.template_stim.draw()
@@ -428,7 +452,7 @@ class CopyDraw(AbstractParadigm):
                             self.cursor.pos = new_pos
                             self.trace_vertices.append(new_pos)
                                 
-                        #ISSUE currently cant do non continuous lines    
+                        ### ISSUE currently cant do non continuous lines    
                             
                             
                         self.trace = visual.ShapeStim(win=self.win,
@@ -454,12 +478,6 @@ class CopyDraw(AbstractParadigm):
                     print('breaking out of main')
                     main_loop = False
 
-                    
-                    
-                
-                    
-                        
-                        
                 
 
                 
@@ -478,6 +496,10 @@ class CopyDraw(AbstractParadigm):
         
         #velo,accel,jerk
         ##Units?!?!
+        
+        ### Can i trust the msperframe to really be constant?! 
+        ### record time at each point as well?
+        
         velocity, velocity_mag = self.deriv_and_norm(mouse_pos_pix, (self.msperframe/10**3))
         acceleration, acceleration_mag = self.deriv_and_norm(velocity, (self.msperframe/10**3))
         jerk, jerk_mag = self.deriv_and_norm(acceleration, (self.msperframe/10**3))
@@ -503,7 +525,7 @@ class CopyDraw(AbstractParadigm):
         
 if __name__ == "__main__":
     try:
-        test = CopyDraw(None,'./',n_trials=2,finishWhenRaised=False)
+        test = CopyDraw(None,'./',n_trials=2,finishWhenRaised=True)
         #test.load_stimuli(test.data_dir / "templates")
         test.init_block()
         test.exec_block()

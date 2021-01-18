@@ -34,13 +34,15 @@ def load_pos_and_template(filepath,templates_dir):
     return pos_arr,template
 
 
-def scale(arr,minmax=None): # add in a way to save the scaling factors
+def scale(array,minmax=None): # add in a way to save the scaling factors
     """
     for scaling a 2d array between 0 and 1
     """    
+    arr=array.copy()
+    
     # pretty sure this can be done with a single matrix mult, which would be easy to save
     for i in range(2):
-        if minmax != None: 
+        if minmax == None: # rename minmax. poor choice
             arr[:,i] -= np.min(arr[:,i])
             arr[:,i] /= np.max(arr[:,i])
         else:
@@ -49,6 +51,43 @@ def scale(arr,minmax=None): # add in a way to save the scaling factors
         
     return arr
 
+
+
+def scale_to_norm_units(array,scaling_matrix=None):
+    """ 
+    for scaling matrix to monitor norm units: scales input array between 0 and 1
+    and then translates to origin in 1,-1 coord system
+    
+    """
+    temp_array = np.ones([array.shape[0],array.shape[1]+1])
+    temp_array[:,0] = array[:,0]
+    temp_array[:,1] = array[:,1]
+    
+    if scaling_matrix == None:
+        scaling_matrix = np.identity(3)
+        
+        #scaling
+        S_x = 1/(np.max(array[:,0]) - np.min(array[:,0]))
+        S_y = 1/(np.max(array[:,1]) - np.min(array[:,1]))
+        
+        #pre scaling translation
+        T_x = -np.min(array[:,0])
+        T_y = -np.min(array[:,1])
+        
+        #post scaling translation
+        t_x = -0.5
+        t_y = -0.5
+        
+        scaling_matrix[0,0] = S_x
+        scaling_matrix[1,1] = S_y
+        
+        scaling_matrix[0,2] = T_x * S_x + t_x
+        scaling_matrix[1,2] = T_y * S_y + t_y
+        
+    return np.matmul(scaling_matrix,temp_array.T).T,scaling_matrix
+        
+        
+    
 #dont need this anymore
 # def load_pixel_data(path_to_mouse_pos_pix):
 #     """ 
