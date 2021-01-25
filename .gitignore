@@ -2,8 +2,9 @@
 #checkpoints
 .ipynb_checkpoints
 
-# results dir
+# dirs
 results/
+sample_data/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

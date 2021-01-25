@@ -10,6 +10,8 @@ import math
 import time
 import logging
 
+import utils
+
 from base import AbstractParadigm
 from psychopy import visual, core,event
 from psychopy.tools.monitorunittools import convertToPix,posToPix
@@ -103,7 +105,7 @@ class CopyDraw(AbstractParadigm):
                  lpt_address = None,
                  serial_nr = None,
                  manyshape=True, #new or old rendering
-                 interp ={'s':0.001,'n_interp':500}, #dict of values or None
+                 interp ={'s':0.001,'n_interp':300}, #dict of values or None
                  old_template_path='../CopyDraw_mat_repo/CopyDrawTask-master/templates/shapes'):
         super().__init__(screen_ix=screen_ix, lpt_address=lpt_address,
                          serial_nr=serial_nr)
@@ -229,21 +231,23 @@ class CopyDraw(AbstractParadigm):
 
             
             if scale:
-                for i in range(2): #do this with a single matrix!
+                # for i in range(2): #do this with a single matrix!
                     
-                    #scale the box first - needs to be scaled by the same factor as the stim right?
-                    self.theBox[:,i] -= np.min(self.theBox[:,i])
-                    self.theBox[:,i] /= np.max(self.theBox[:,i])
+                #     #scale the box first - needs to be scaled by the same factor as the stim right?
+                #     self.theBox[:,i] -= np.min(self.theBox[:,i])
+                #     self.theBox[:,i] /= np.max(self.theBox[:,i])
                     
-                    self.current_stimulus[:,i] -= np.min(self.current_stimulus[:,i])
-                    self.current_stimulus[:,i] /= np.max(self.current_stimulus[:,i])
+                #     self.current_stimulus[:,i] -= np.min(self.current_stimulus[:,i])
+                #     self.current_stimulus[:,i] /= np.max(self.current_stimulus[:,i])
                     
                 
-                #centered for norm units
-                self.current_stimulus = self.current_stimulus - 0.5
-                self.theBox = self.theBox - 0.5
+                # #centered for norm units
+                # self.current_stimulus = self.current_stimulus - 0.5
+                # self.theBox = self.theBox - 0.5
                 
-                
+                self.current_stimulus,self.scaling_matrix = utils.scale_to_norm_units(self.current_stimulus)
+                self.theBox,_ = utils.scale_to_norm_units(self.theBox,scaling_matrix=self.scaling_matrix)
+                print('scaled')
                 if self.flip:
                     self.current_stimulus = np.matmul(self.current_stimulus, np.array([[1,0],[0,-1]]))
                     self.theBox = np.matmul(self.theBox, np.array([[1,0],[0,-1]]))
@@ -285,6 +289,8 @@ class CopyDraw(AbstractParadigm):
         #display a single copydraw task
         
         print('executing trial')
+        
+        self.trial_results = {}
         
         ## old style render or new?
         if self.manyshape:
@@ -483,29 +489,23 @@ class CopyDraw(AbstractParadigm):
                 
         print('converting mouse data')
         mouse_pos = np.array(mouse_pos)
+        #this is called traceLet in matlab - rename?
         mouse_pos_pix = convertToPix(mouse_pos,win=self.win,units='norm',pos=(0,0))
         #mouse_pos_cm = pix2cm(mouse_pos_pix, mon)
 
-        # savepath = Path(str(self.results_dir),self.stimuli_fname[:-4],str(stimuli_idx))
-        # savepath.mkdir(parents=True,exist_ok=True)
-        # print(savepath)
-        # np.save(Path(savepath,'mouse_pos'),mouse_pos)
-        # np.save(Path(savepath,'mouse_pos_pix'),mouse_pos_pix)
-        # np.save(Path(savepath,'template_pix'),self.template_stim.verticesPix)
-        # logger.info('Saved mouse data')
         
-        #velo,accel,jerk
-        ##Units?!?!
+        # ##### Kinematic scores ##### - should this be a seperate method?
+        kin_scores = self.kin_scores(mouse_pos_pix,self.msperframe/10**3)
+        self.trial_results = {**self.trial_results, **kin_scores }
         
-        ### Can i trust the msperframe to really be constant?! 
-        ### record time at each point as well?
-        
-        velocity, velocity_mag = self.deriv_and_norm(mouse_pos_pix, (self.msperframe/10**3))
-        acceleration, acceleration_mag = self.deriv_and_norm(velocity, (self.msperframe/10**3))
-        jerk, jerk_mag = self.deriv_and_norm(acceleration, (self.msperframe/10**3))
+        ### movingmean func is used in matlab to get subsampled traceLet
+        ### not in matlab by default is it this?
+        ### https://uk.mathworks.com/matlabcentral/fileexchange/41859-moving-average-function
         
         
-        self.trial_idx += 1
+        # ### Can i trust the msperframe to really be constant?! can i use property or lazy prop for this...?
+        # ### record time at each point as well?
+        
         
     def exit(self):
         self.finish_block()
@@ -519,9 +519,77 @@ class CopyDraw(AbstractParadigm):
         for each timepoint and returns it (along with the magnitudes)
         
         """
+        ### This is not the same as the kinematic scores in the matlab code!
+        # I have an extra division by delta t - is this correct?
+        # he uses trialTime not delta t too
         deriv_var = np.diff(var,axis=0)/delta_t
         deriv_var_norm = norm(deriv_var,axis=1)
-        return deriv_var,deriv_var_norm
+        return deriv_var,deriv_var_norm 
+    
+    
+    def kin_scores(self, var_pos, delta_t,sub_sampled=False): 
+        
+        kin_res = {}
+        
+        kin_res['pos_t'] = var_pos
+        
+        velocity, velocity_mag = self.deriv_and_norm(var_pos, delta_t)
+        accel, accel_mag = self.deriv_and_norm(velocity, delta_t)
+        jerk, jerk_mag = self.deriv_and_norm(accel, delta_t)
+        
+        N = len(var_pos)
+        
+        #average
+        ## divided by number of timepoints, because delta t was used to calc instead of total t
+        kin_res['speed'] = np.sum(velocity_mag) / N
+        kin_res['acceleration'] = np.sum(accel_mag) / N
+        kin_res['velocity_x'] = np.sum(np.abs(velocity[:,0])) / N
+        kin_res['velocity_y'] = np.sum(np.abs(velocity[:,1])) / N
+        kin_res['acceleration_x'] = np.sum(np.abs(accel[:,0])) / N
+        kin_res['acceleration_y'] = np.sum(np.abs(accel[:,1])) / N
+        
+        #isj
+        # in matlab this variable is overwritten
+        isj_ = np.sum((jerk * (delta_t)**3)**2,axis=0)
+        kin_res['isj_x'],kin_res['isj_y'] = isj_[0],isj_[1]
+        kin_res['isj'] = np.mean(isj_)
+        
+        kin_res['speed_t'] = velocity * (delta_t)
+        kin_res['accel_t']= accel * (delta_t)**2
+        kin_res['jerk_t'] = jerk * (delta_t)**3
+        
+        if sub_sampled:
+            kin_res = {f'{k}_sub':v for k,v in kin_res}
+        
+        return kin_res
+        
+        
+    def store_trial(self):
+        #add to dict or sth save all trials as block?
+        
+        keys = ['dt','dt_l','w','pathlen','len','dt_norm','speed','speed_sub', 
+        'velocity_x','velocity_x_sub','velocity_y','velocity_y_sub','isj',
+        'isj_sub', 'isj_x', 'isj_x_sub', 'isj_y', 'isj_y_sub', 'acceleration', 
+        'acceleration_sub', 'acceleration_x', 'acceleration_x_sub', 'acceleration_y', 
+        'acceleration_y_sub', 'pos_t', 'pos_t_sub', 'speed_t','speed_t_sub', 
+        'accel_t','accel_t_sub','jerk_t', 'jerk_t_sub', 'dist_t', 'ptt', 
+        'ix_block', 'ix_trial', 'startTStamp', 'stim']
+        
+        for key in keys:
+            #put this into try except
+            assert key in self.trial_results.keys()
+            #print warning - dont save?
+            
+        #then do saving/storing
+        
+        #del trial_results after? or reset to empty dict?
+        
+    def save_block(self):
+        #take stored trials and actually save them?
+        pass
+        
+        
+
         
 if __name__ == "__main__":
     try:

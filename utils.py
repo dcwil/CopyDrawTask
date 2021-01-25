@@ -52,20 +52,29 @@ def scale(array,minmax=None): # add in a way to save the scaling factors
     return arr
 
 
-
+### Will need to apply inverse to convert from norm to og units again right?
+### Need to check if scaling matrix is invertible (probably is tho)
+### should this be a static method or a separate func?
+### add in option to flip vertically or however
 def scale_to_norm_units(array,scaling_matrix=None):
     """ 
     for scaling matrix to monitor norm units: scales input array between 0 and 1
     and then translates to origin in 1,-1 coord system
     
     """
+    
+    #translation require an extra col of 1s
     temp_array = np.ones([array.shape[0],array.shape[1]+1])
+    
+    #is this copying or referencing? Check it!
     temp_array[:,0] = array[:,0]
     temp_array[:,1] = array[:,1]
     
-    if scaling_matrix == None:
+    if scaling_matrix is None:
         scaling_matrix = np.identity(3)
         
+        
+        ##minmax scaling
         #scaling
         S_x = 1/(np.max(array[:,0]) - np.min(array[:,0]))
         S_y = 1/(np.max(array[:,1]) - np.min(array[:,1]))
@@ -74,6 +83,8 @@ def scale_to_norm_units(array,scaling_matrix=None):
         T_x = -np.min(array[:,0])
         T_y = -np.min(array[:,1])
         
+        
+        ##translate to origin in norm units
         #post scaling translation
         t_x = -0.5
         t_y = -0.5
@@ -84,7 +95,8 @@ def scale_to_norm_units(array,scaling_matrix=None):
         scaling_matrix[0,2] = T_x * S_x + t_x
         scaling_matrix[1,2] = T_y * S_y + t_y
         
-    return np.matmul(scaling_matrix,temp_array.T).T,scaling_matrix
+    scaled_matrix = np.matmul(scaling_matrix,temp_array.T).T[:,:-1]
+    return scaled_matrix,scaling_matrix
         
         
     
