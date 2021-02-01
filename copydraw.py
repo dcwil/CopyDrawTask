@@ -20,6 +20,8 @@ from numpy.linalg import norm
 from pathlib import Path
 from itertools import permutations
 
+from dtw import *
+
 from scipy.interpolate import splprep, splev
 
 logger = logging.getLogger('CopyDraw')
@@ -409,7 +411,6 @@ class CopyDraw(AbstractParadigm):
             
             if self.mouse.isPressedIn(self.startpoint): #click in startpoint
                 self.startpoint.fillColor = 'Cyan'
-                #turned_cyan = True
                 
                 #self.instructions.draw()
                 self.template_stim.draw()
@@ -494,24 +495,28 @@ class CopyDraw(AbstractParadigm):
         #mouse_pos_cm = pix2cm(mouse_pos_pix, mon)
 
         
-        # ##### Kinematic scores ##### - should this be a seperate method?
+        ##### Kinematic scores #####
         kin_scores = self.kin_scores(mouse_pos_pix,self.msperframe/10**3)
         self.trial_results = {**self.trial_results, **kin_scores }
         
-        ### movingmean func is used in matlab to get subsampled traceLet
-        ### not in matlab by default is it this?
-        ### https://uk.mathworks.com/matlabcentral/fileexchange/41859-moving-average-function
+        ## sub sample ##
+        mouse_pos_pix_sub = self.movingmean(mouse_pos_pix,5)
+        mouse_pos_pix_sub = mouse_pos_pix_sub[::3,:] # take every third point
+        kin_scores_sub = self.kin_scores(mouse_pos_pix_sub,self.msperframe/10**3,sub_sampled=True)
+        self.trial_results = {**self.trial_results, **kin_scores_sub}
         
         
-        # ### Can i trust the msperframe to really be constant?! can i use property or lazy prop for this...?
-        # ### record time at each point as well?
+        
+        
+        ### Can i trust the msperframe to really be constant?! can i use property or lazy prop for this...?
+        ### record time at each point as well?
         
         
     def exit(self):
         self.finish_block()
         #core.quit()
 
-    #features
+    #should these static methods bein utils instead?
     @staticmethod
     def deriv_and_norm(var,delta_t):
         """
@@ -520,11 +525,42 @@ class CopyDraw(AbstractParadigm):
         
         """
         ### This is not the same as the kinematic scores in the matlab code!
-        # I have an extra division by delta t - is this correct?
-        # he uses trialTime not delta t too
+        # matlab code uses trialTime instead of delta_t, will need to divide by N
         deriv_var = np.diff(var,axis=0)/delta_t
         deriv_var_norm = norm(deriv_var,axis=1)
-        return deriv_var,deriv_var_norm 
+        return deriv_var,deriv_var_norm     
+    
+    
+    @staticmethod
+    def movingmean(arr,w_size):
+        # trying to mimic some of the functionality from:
+        # https://uk.mathworks.com/matlabcentral/fileexchange/41859-moving-average-function
+        # which i think is the function used in compute_scoreSingleTrial.m (not in matlab by default)
+        
+        #returns an array of the same size by shrinking the window for the start and end points
+        
+        #round even window sizes down
+        if w_size%2 == 0:
+            w_size -= 1
+        
+        w_tail = np.floor(w_size/2)
+        
+        arr_sub = np.zeroslike(arr)
+        
+        for j,col in enumerate(arr.T): # easier to work with columns like this
+            for i,val in enumerate(col):
+                
+                #truncate window if needed
+                start = i - w_tail if i > w_tail else 0
+                stop = i + w_tail + 1 if i + w_tail < len(col) else len(col)
+                s = slice(int(start),int(stop))
+                
+                #idxs reversed bc .T
+                arr_sub[i,j] = np.mean(col[s])
+                
+                #could probably find a way to do this both cols at the same time
+        
+        return arr_sub
     
     
     def kin_scores(self, var_pos, delta_t,sub_sampled=False): 
@@ -564,9 +600,10 @@ class CopyDraw(AbstractParadigm):
         return kin_res
         
         
-    def store_trial(self):
+    def store_trial(self): #what will the purpose of this be?!
         #add to dict or sth save all trials as block?
         
+        #to get these keys need kin_scores (twice, once subsampled, dtw and ... )
         keys = ['dt','dt_l','w','pathlen','len','dt_norm','speed','speed_sub', 
         'velocity_x','velocity_x_sub','velocity_y','velocity_y_sub','isj',
         'isj_sub', 'isj_x', 'isj_x_sub', 'isj_y', 'isj_y_sub', 'acceleration', 
@@ -587,6 +624,25 @@ class CopyDraw(AbstractParadigm):
     def save_block(self):
         #take stored trials and actually save them?
         pass
+    
+    
+    def dtw_features(self,trace,template,step_pattern='symmetric1'):
+        
+        alignment = dtw(trace,template,step_pattern=step_pattern,keep_internals=True)
+        
+        
+        
+    #### dtw ####
+    # alignment = dtw(tracea, template)
+    
+    
+    #need to set step pattern to either symmetric1 or asymmetric NOT default symmetric2
+    
+    # w/optim_path is alignment.index1 and 2
+    # is d/dt == alignment.distance/2 ?? #not if you use symmetric1 or asymetric as step pattern
+    # pathlen/idx_min is probably jmin? (adapt for ptyhon counting though)
+    #d_l is costMatrix[-1:jmin-1] but might switch indices check later
+    
         
         
 
