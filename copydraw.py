@@ -21,6 +21,7 @@ from pathlib import Path
 from itertools import permutations
 
 from dtw import *
+from dtw_matlab import dtw_matlab
 
 from scipy.interpolate import splprep, splev
 
@@ -452,6 +453,7 @@ class CopyDraw(AbstractParadigm):
                             
                        # if started_drawing:
                         if self.mouse.getPressed()[0]:
+                            #record time points
                             new_pos = convertToPix(self.mouse.getPos(),
                                                            (0,0),
                                                            units=self.mouse.units,
@@ -495,6 +497,10 @@ class CopyDraw(AbstractParadigm):
         #mouse_pos_cm = pix2cm(mouse_pos_pix, mon)
 
         
+
+
+        # put this feature calculation section in its own func
+        
         ##### Kinematic scores #####
         kin_scores = self.kin_scores(mouse_pos_pix,self.msperframe/10**3)
         self.trial_results = {**self.trial_results, **kin_scores }
@@ -504,6 +510,14 @@ class CopyDraw(AbstractParadigm):
         mouse_pos_pix_sub = mouse_pos_pix_sub[::3,:] # take every third point
         kin_scores_sub = self.kin_scores(mouse_pos_pix_sub,self.msperframe/10**3,sub_sampled=True)
         self.trial_results = {**self.trial_results, **kin_scores_sub}
+        
+        
+        ##### dtw #####
+        dtw_res = self.dtw_features(mouse_pos_pix, self.current_stimulus)
+        self.trial_results = {**self.trial_results, **dtw_res}
+        # think about units here bound to run into issues!
+        
+        
         
         
         
@@ -545,7 +559,7 @@ class CopyDraw(AbstractParadigm):
         
         w_tail = np.floor(w_size/2)
         
-        arr_sub = np.zeroslike(arr)
+        arr_sub = np.zeros_like(arr)
         
         for j,col in enumerate(arr.T): # easier to work with columns like this
             for i,val in enumerate(col):
@@ -582,7 +596,7 @@ class CopyDraw(AbstractParadigm):
         kin_res['velocity_x'] = np.sum(np.abs(velocity[:,0])) / N
         kin_res['velocity_y'] = np.sum(np.abs(velocity[:,1])) / N
         kin_res['acceleration_x'] = np.sum(np.abs(accel[:,0])) / N
-        kin_res['acceleration_y'] = np.sum(np.abs(accel[:,1])) / N
+        kin_res['acceleration_y'] = np.sum(np.abs(accel[:,1])) / N #matlab code does not compute y values, incorrect indexing
         
         #isj
         # in matlab this variable is overwritten
@@ -595,7 +609,7 @@ class CopyDraw(AbstractParadigm):
         kin_res['jerk_t'] = jerk * (delta_t)**3
         
         if sub_sampled:
-            kin_res = {f'{k}_sub':v for k,v in kin_res}
+            kin_res = {f'{k}_sub':v for k,v in kin_res.items()}
         
         return kin_res
         
@@ -625,34 +639,115 @@ class CopyDraw(AbstractParadigm):
         #take stored trials and actually save them?
         pass
     
+    @staticmethod # again, should this be in a separate file?
+    def dtw_features(trace,template,step_pattern='MATLAB'):
+        res = {}
+        if step_pattern != 'MATLAB':
+            alignment = dtw(trace,template,step_pattern=step_pattern,keep_internals=True)
+            
+            
+            idx_min = np.argmin(alignment.localCostMatrix[-1,1:]) #called pathlen briefly in .m files
+            
+            res['w'] = np.stack([alignment.index1,alignment.index2],axis=1)
+            res['pathlen'] = min([idx_min,template.shape[0]]) #bug in matlab code here, chooses wrong template axis
+            res['dt'] = alignment.distance
+            res['dt_l'] = alignment.costMatrix[-1,idx_min]
+        else:
+            res['dt'],res['dt_l'],res['w'],pathlen = dtw_matlab(trace,template)
+            res['pathlen'] = min([pathlen,template.shape[0]]) #bug in matlab code here, chooses wrong template axis
+            
+        return res
     
-    def dtw_features(self,trace,template,step_pattern='symmetric1'):
+    #@staticmethod    
+    def check_results(self,sample_data,template,trial_time=2.7): #might also be 2.2 check both?
+        trial_results = {}
         
-        alignment = dtw(trace,template,step_pattern=step_pattern,keep_internals=True)
-        
-        
-        
-    #### dtw ####
-    # alignment = dtw(tracea, template)
-    
-    
-    #need to set step pattern to either symmetric1 or asymmetric NOT default symmetric2
-    
-    # w/optim_path is alignment.index1 and 2
-    # is d/dt == alignment.distance/2 ?? #not if you use symmetric1 or asymetric as step pattern
-    # pathlen/idx_min is probably jmin? (adapt for ptyhon counting though)
-    #d_l is costMatrix[-1:jmin-1] but might switch indices check later
-    
+        pos_t = sample_data['pos_t'].copy().astype(float)
         
         
+        delta_t = trial_time/len(pos_t)
+        
+        ##### Kinematic scores #####
+        kin_scores = self.kin_scores(pos_t,delta_t)
+        trial_results = {**trial_results, **kin_scores }
+        
+        ## sub sample ##
+        mouse_pos_pix_sub = self.movingmean(pos_t,5)
+        mouse_pos_pix_sub = mouse_pos_pix_sub[::3,:] # take every third point
+        kin_scores_sub = self.kin_scores(mouse_pos_pix_sub,delta_t*3,sub_sampled=True)
+        trial_results = {**trial_results, **kin_scores_sub}
+        
+        
+        ##### dtw #####
+        dtw_res = self.dtw_features(pos_t, template)
+        trial_results = {**trial_results, **dtw_res}
+        
+        
+        ##### misc ##### 
+        # +1 on the pathlens bc matlab indexing
+        trial_results['dist_t'] = np.sqrt(np.sum((template[trial_results['w'].astype(int)[:trial_results['pathlen']+1,0],:] - pos_t[trial_results['w'].astype(int)[:trial_results['pathlen']+1,1]])**2,axis=1))
+        
+        # normalize distance dt by length of copied template (in samples)
+        trial_results['dt_norm'] = trial_results['dt_l'] / (trial_results['pathlen']+1)
+        
+        # get length of copied part of the template (in samples)
+        trial_results['len'] = (trial_results['pathlen']+1) / len(template)
+        
+        
+        ### no way to calculate these ###
+        #its the time between touching the cyan square and starting drawing (i think)
+        trial_results['ptt'] = sample_data['ptt']
+        trial_results['ix_block'] = sample_data['ix_block']
+        trial_results['ix_trial'] = sample_data['ix_trial']
+        trial_results['startTStamp'] = sample_data['startTStamp']
+        trial_results['stim'] = sample_data['stim']
+        
+        
+        
+        ### weird stuff and index changes ###
+        #trial_results['pos_t'] = trial_results['pos_t'].astype('<u2')
+        trial_results['pathlen'] += 1
+        trial_results['w'] += 1
+        trial_results['acceleration'] *= delta_t
+        trial_results['acceleration_x'] *= delta_t
+        trial_results['acceleration_y'] *= delta_t
+        trial_results['acceleration_sub'] *= delta_t*3
+        trial_results['acceleration_x_sub'] *= delta_t*3
+        trial_results['acceleration_y_sub'] *= delta_t*3
+        
+        def check_with_tol(x,y,tol=0.0001):
+            return np.abs(x-y)<tol
+        
+        print('calculated results - beginning checks')
+        for key,data in trial_results.items():
+            try:
+                if isinstance(data,np.ndarray):
+                    check = check_with_tol(data, sample_data[key]).all()
+                    
+                    if not check:
+                        print(f'{key} FAILED')
+                else:
+                    
+                    
+                    check = check_with_tol(data, sample_data[key])
+                    
 
-        
+                    if not check:
+                        print(f'{key} FAILED: {data} should be {sample_data[key]}')
+            except:
+                print(f'encountered error with {key}')
+                
+        return trial_results
+    
+    
 if __name__ == "__main__":
     try:
         test = CopyDraw(None,'./',n_trials=2,finishWhenRaised=True)
-        #test.load_stimuli(test.data_dir / "templates")
-        test.init_block()
-        test.exec_block()
+        
+        
+        
+        #test.init_block()
+        #test.exec_block()
         #test.exec_trial(1)
         test.exit()
     except Exception as e:

@@ -7,6 +7,9 @@ Created on Mon Feb  1 11:09:25 2021
 
 #is unit tests the appropriate name for this?
 
+
+### Pretty sure none of this code is needed anymore! ###
+
 import matplotlib.pyplot as plt
 import scipy.io as sio
 import numpy as np
@@ -17,10 +20,10 @@ from dtw import *
 scores = sio.loadmat('sample_data/scores_copyDraw_block01.mat',simplify_cells=True)
 templates = sio.loadmat('templates/Size_20.mat',simplify_cells=True)
 
-test_trial = scores['block_perf'][4]
+test_trial = scores['block_perf'][5]
 
 test_trace = test_trial['pos_t']
-test_template = templates['new_shapes'][1]
+test_template = templates['new_shapes'][4]
 
 ### check that we have the right template ###
 ### cant find any indicator of the template in the sample data scores ###
@@ -30,8 +33,8 @@ plt.plot(test_template[:,0],test_template[:,1],label='template')
 plt.legend()
 plt.show()
 ### visually inspect! ###
-#trial 4 goes with template 1
-#trial 5 goes with template 4
+#trial 4 goes with template 1 d:[360,518]
+#trial 5 goes with template 4 d_l:[360,515]
 #trial 6 goes with template 0
 
 #https://stackoverflow.com/questions/36522220/searching-a-sequence-in-a-numpy-array
@@ -226,4 +229,4 @@ for i,sp in enumerate(step_patterns):
     axs[i].set_title(sp)
     axs[i].legend()
 plt.tight_layout()
-plt.savefig('step_patterns.pdf', format='pdf')
+#plt.savefig('step_patterns.pdf', format='pdf')

@@ -3,8 +3,8 @@
 #### Todo  #####
 
 - Interpolate the trace (3rd order poly or splines)
-- replicate saving format
-- write scoring function
+- replicate saving format (almost done - need trial times to thoroughly check)
+- write scoring function 
 - record scaling factor (from trace to norm units)
 - draw the box (use any of the vertices)
 - when n_trials > number of trials in the file, show repeat trials but randomise and stratify
@@ -13,55 +13,4 @@
 - add in ability to draw broken lines (when finishWhenRaise == False)
 - put in RGB colour values
 - create a YAML for repo
-
-
-#### questions ####
-
-1) what does _sub refer to in data(tracelet sub is moving mean?)
-    is it the movingmean func from here: https://uk.mathworks.com/matlabcentral/fileexchange/41859-moving-average-function
-    not in matlab by default
-
-#### Data structure ####
-
-block_perf is a list containing 12 dicts
-1 dict for each trials
-
-keys of the dict are as follows:
-'dt',                   #d from dtw
-'dt_l',                 #d_l from dtw
-'w',                    #optim_path from dtw,window parameter?
-'pathlen',              #idx_min from dtw, gets changed to whatever is shorter pathlen or 2nd dim of template
-'len',                  #pathlen divided by length of template                  
-'dt_norm',              #normalise distance dt by length of template
-'speed', 
-'speed_sub', 
-'velocity_x', 
-'velocity_x_sub', 
-'velocity_y', 
-'velocity_y_sub', 
-'isj', 
-'isj_sub', 
-'isj_x', 
-'isj_x_sub', 
-'isj_y', 
-'isj_y_sub', 
-'acceleration', 
-'acceleration_sub', 
-'acceleration_x', 
-'acceleration_x_sub', 
-'acceleration_y', 
-'acceleration_y_sub', 
-'pos_t', 
-'pos_t_sub', 
-'speed_t',          #
-'speed_t_sub', 
-'accel_t',              #array of ints, (359,2), mostly 0s and -1s
-'accel_t_sub',          #array of floats, (119,2)
-'jerk_t', 
-'jerk_t_sub', 
-'dist_t', 
-'ptt', 
-'ix_block', 
-'ix_trial', 
-'startTStamp', 
-'stim'
+-  min number of points for smooth curve?
