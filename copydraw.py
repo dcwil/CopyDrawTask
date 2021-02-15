@@ -13,7 +13,7 @@ import logging
 import utils
 
 from base import AbstractParadigm
-from psychopy import visual, core,event
+from psychopy import visual, core, event, clock
 from psychopy.tools.monitorunittools import convertToPix,posToPix
 from numpy.linalg import norm
 
@@ -94,11 +94,12 @@ class ManyShapeStim():
 
 class CopyDraw(AbstractParadigm):
     
+    #should there be an n_blocks arg?
     def __init__(self,
                  session_name,
                  data_dir,
                  n_trials=12,
-                 letter_time=2.2,
+                 trialTime=2.2,
                  image_size=2,
                  n_letters=3,
                  finishWhenRaised=True,
@@ -108,7 +109,7 @@ class CopyDraw(AbstractParadigm):
                  lpt_address = None,
                  serial_nr = None,
                  manyshape=True, #new or old rendering
-                 interp ={'s':0.001,'n_interp':300}, #dict of values or None
+                 interp = 'smooth', #{'s':0.001,'n_interp':300}, dict of values or None or 'smooth'
                  old_template_path='../CopyDraw_mat_repo/CopyDrawTask-master/templates/shapes'):
         super().__init__(screen_ix=screen_ix, lpt_address=lpt_address,
                          serial_nr=serial_nr)
@@ -116,7 +117,7 @@ class CopyDraw(AbstractParadigm):
         self.session_name = time.asctime( time.localtime(time.time()) ).replace(':','-') if session_name == None else session_name #saving name
         self.data_dir = Path(data_dir) #templates, instructions and saves stored here
         self.n_trials = n_trials
-        self.letter_time = letter_time
+        self.trialTime = trialTime
         self.image_size = image_size
         self.n_letters = n_letters
         self.finishWhenRaised = finishWhenRaised 
@@ -126,6 +127,7 @@ class CopyDraw(AbstractParadigm):
         self.old_template_path = old_template_path
         self.manyshape = manyshape
         self.interp = interp
+        self.block_idx = 0 # this gets +1'd every time exec block is called, need a setter too?
         print('initialised')
         
         
@@ -137,8 +139,15 @@ class CopyDraw(AbstractParadigm):
         self.msperframe,_,_ = self.win.getMsPerFrame()
         
         
+        #dropped frames
+        self.win.recordFrameIntervals = True
+        
+        
         self.load_stimuli(self.data_dir / "templates")
         
+        
+        
+        ### move object creation out of here? ###
         #instructions
         self.load_instructions(self.data_dir / 'instructions' / 'instructions.png')
         self.instructions = visual.ImageStim(
@@ -232,32 +241,32 @@ class CopyDraw(AbstractParadigm):
             self.current_stimulus = self.templates[stimuli_idx].astype(float)
             self.get_box(stimuli_idx)
 
-            
             if scale:
-                # for i in range(2): #do this with a single matrix!
-                    
-                #     #scale the box first - needs to be scaled by the same factor as the stim right?
-                #     self.theBox[:,i] -= np.min(self.theBox[:,i])
-                #     self.theBox[:,i] /= np.max(self.theBox[:,i])
-                    
-                #     self.current_stimulus[:,i] -= np.min(self.current_stimulus[:,i])
-                #     self.current_stimulus[:,i] /= np.max(self.current_stimulus[:,i])
-                    
-                
-                # #centered for norm units
-                # self.current_stimulus = self.current_stimulus - 0.5
-                # self.theBox = self.theBox - 0.5
                 
                 self.current_stimulus,self.scaling_matrix = utils.scale_to_norm_units(self.current_stimulus)
                 self.theBox,_ = utils.scale_to_norm_units(self.theBox,scaling_matrix=self.scaling_matrix)
+                
+                #reorder
+                #self.theBox[-1],self.theBox[-2] = self.theBox[-2].copy(),self.theBox[-1].copy()
+                newboxarray = np.zeros([4,2])
+                newboxarray[0:2] = self.theBox[0:2]
+                newboxarray[2],newboxarray[3] = self.theBox[3],self.theBox[2]
+                self.theBox = newboxarray
+                
+                
+                
+                
                 print('scaled')
                 if self.flip:
                     self.current_stimulus = np.matmul(self.current_stimulus, np.array([[1,0],[0,-1]]))
                     self.theBox = np.matmul(self.theBox, np.array([[1,0],[0,-1]]))
                     
                     
-                    
-            if self.interp is not None:
+            
+            if self.interp == 'smooth':        
+                self.current_stimulus = utils.smooth(self.current_stimulus,return_df=False)
+            
+            elif self.interp is not None:
                 tck, u = splprep(self.current_stimulus.T, s=self.interp['s'])
                 
                 
@@ -284,9 +293,11 @@ class CopyDraw(AbstractParadigm):
     
     def exec_block(self):
         #call exec trial 12? times
-        print('executing block')
+        print(f'executing block {self.block_idx}')
         for trial_idx in range(self.n_trials):
             self.exec_trial(trial_idx)
+            
+        self.block_idx += 1
         
     def exec_trial(self,stimuli_idx, scale=True):
         #display a single copydraw task
@@ -295,10 +306,15 @@ class CopyDraw(AbstractParadigm):
         
         self.trial_results = {}
         
+        
+        #### refactor all this, put shape creation in a func, and shape drawing in a func ####
+        #### keep all drawn elements in a dict instead? ####
+        
+        
         ## old style render or new?
         if self.manyshape:
             #seems like the only way to get thicker lines
-            manyshape_size = 0.02
+            manyshape_size = 0.035
             self.template_stim = ManyShapeStim(self.get_stimuli(stimuli_idx,scale=scale),
                                                 visual.Circle,
                                                 {'win':self.win,
@@ -326,14 +342,10 @@ class CopyDraw(AbstractParadigm):
 
         
         
-        
-        
-        
-        
         self.box = visual.ShapeStim(
             win=self.win,
-            vertices = self.theBox,#np.array([[-0.9,0.9],[0.9,0.9],[0.9,-0.9],[-0.9,-0.9]]),
-            closeShape=False,
+            vertices = self.theBox,#[:4],#np.array([[-0.9,0.9],[0.9,0.9],[0.9,-0.9],[-0.9,-0.9]]),
+            closeShape=True,
             pos=(0,0),
             size=1.5,
             lineColor='white')#[160,160,180])
@@ -358,15 +370,25 @@ class CopyDraw(AbstractParadigm):
             lineColor='red'
             )
         
+        #trace
         self.trace_vertices = [self.template_stim.verticesPix[0]]
-        
+        self.trace = visual.ShapeStim(win=self.win,
+                                          units='pix',
+                                          vertices=self.trace_vertices,
+                                          #colorSpace = 'rgb255',
+                                          lineColor='red',
+                                          lineWidth=2,
+                                          interpolate=True,
+                                          closeShape=False)
+        #getting a monitor gamut error when doing rgb colours, look into it
+        #self.trace.colorSpace = 'rgb255'
         
         self.instructions.draw()
         self.template_stim.draw()
         self.startpoint.draw()
         self.cursor.draw()
         self.trial_number.draw()
-        #self.box.draw()
+        self.box.draw()
         self.win.flip()
          
         
@@ -375,13 +397,8 @@ class CopyDraw(AbstractParadigm):
                       pos = (0,-0.85),
                       size=(1,0.025),
                       fillColor='gray')
-        
-        #calc timebar shrinking vals ## is  there a better way to do this
-        trial_dur_frames = math.ceil(self.letter_time / (self.msperframe/10**3))
-        print(f'there will be {trial_dur_frames} in {self.letter_time}')
         timebar_x = self.timebar.size[0]
-        timebar_x_vals = np.linspace(timebar_x,0,num=trial_dur_frames)
-        #timebar_shift_perframe = timebar_x/trial_dur_frames
+
         
         #mouse
         self.mouse = event.Mouse()
@@ -402,7 +419,7 @@ class CopyDraw(AbstractParadigm):
             self.startpoint.draw()
             self.cursor.draw()
             self.timebar.draw()
-            #self.box.draw()
+            self.box.draw()
             self.trial_number.draw()
             
             if self.startpoint.fillColor != 'Cyan': #only show instructions if startpoint not clicked
@@ -412,67 +429,92 @@ class CopyDraw(AbstractParadigm):
             
             if self.mouse.isPressedIn(self.startpoint): #click in startpoint
                 self.startpoint.fillColor = 'Cyan'
+                tic = clock.getTime()
+                
                 
                 #self.instructions.draw()
                 self.template_stim.draw()
                 self.startpoint.draw()
                 self.cursor.draw()
                 self.timebar.draw()
-                #self.box.draw()
+                self.box.draw()
                 self.trial_number.draw()
                 self.win.flip()
                 #while self.startpoint.contains(self.mouse.getPos()): #start when mouse leaves startpoint
                 
+                
+                
+                
             if self.startpoint.fillColor == 'Cyan':
-                #timebar decreasing& recording mouse pos
+
                 mouse_pos = []
-                #mouse_pos_pix = []
                 
-                
-                if self.mouse.isPressedIn(self.cursor): # start movement section
-                    started_drawing = True                
-                
-                
+                # drawing has begun
+                if self.mouse.isPressedIn(self.cursor):
+                    
+                    started_drawing = True
+                    
+                    trial_timer = clock.CountdownTimer(self.trialTime) 
+                    
+                    #save start time
+                    self.startTStamp = clock.getTime()         
+                    
+                    #calc pre trial time
+                    self.ptt = self.startTStamp - tic
+
+                # shrink time bar, draw trace, once drawing has started
                 if started_drawing == True:
-                    #start decreasing timebar
-                    for frame_n in range(trial_dur_frames):
-                        self.timebar.setSize([timebar_x_vals[frame_n],self.timebar.size[1]])
-                        self.timebar.setPos([(-timebar_x_vals[frame_n]/2) + timebar_x/2,self.timebar.pos[1]])
+                    
+                    # for recording times associated with cursor pos
+                    self.cursor_t = [self.startTStamp]
+                    
+                    
+                    
+                    ### soon to be replaced with countdown timer whileloop to provide more solid timings ###
+                    #decreasing timebar
+                    
+                    while trial_timer.getTime() > 0:
+                    #for i,frame_n in enumerate(range(trial_dur_frames)):
                         
-                        mouse_pos.append(self.mouse.getPos())
-                        #mouse_pos_pix.append(posToPix(mouse))
+                        #get remaining time
+                        t_remain = trial_timer.getTime()
+                        ratio = t_remain/self.trialTime
+                        
+                        #adjust timebar size and position
+                        self.timebar.setSize([timebar_x*ratio,self.timebar.size[1]])
+                        self.timebar.setPos([(-timebar_x*ratio/2) + timebar_x/2,self.timebar.pos[1]])
+                        
                         
                         self.timebar.draw()
                         #self.instructions.draw()
                         self.template_stim.draw()
                         self.startpoint.draw()
                         self.trial_number.draw()
-                        #self.box.draw()
+                        self.box.draw()
     
                         
                             
-                       # if started_drawing:
+                        #while mouse is pressed in, update cursor position
                         if self.mouse.getPressed()[0]:
-                            #record time points
+                            
+                            #get new position from mouse
                             new_pos = convertToPix(self.mouse.getPos(),
                                                            (0,0),
                                                            units=self.mouse.units,
                                                            win=self.win)
+                            
+                            #record time at which that happened
+                            self.cursor_t.append(clock.getTime())
+                            
+                            #move cursor to that position and save for drawing trace
                             self.cursor.pos = new_pos
+                            #self.cursor_idx.append(i)
                             self.trace_vertices.append(new_pos)
+                            self.trace.vertices = self.trace_vertices
+
+                            
                                 
                         ### ISSUE currently cant do non continuous lines    
-                            
-                            
-                        self.trace = visual.ShapeStim(win=self.win,
-                                          units='pix',
-                                          vertices=self.trace_vertices,
-                                          lineColor='red',
-                                          lineWidth=2,
-                                          interpolate=True,
-                                          closeShape=False)
-                        
-                        
                         
                         self.trace.draw()
                         self.cursor.draw()
@@ -485,45 +527,46 @@ class CopyDraw(AbstractParadigm):
                     
                     #timebar elapsed
                     print('breaking out of main')
+                    print(f'recorded {len(self.trace_vertices)} points at a rate of {len(self.trace_vertices)/self.trialTime} points per sec')
                     main_loop = False
+                    
+            
 
-                
-
-                
-        print('converting mouse data')
-        mouse_pos = np.array(mouse_pos)
-        #this is called traceLet in matlab - rename?
-        mouse_pos_pix = convertToPix(mouse_pos,win=self.win,units='norm',pos=(0,0))
-        #mouse_pos_cm = pix2cm(mouse_pos_pix, mon)
-
+        ##### put this feature calculation section in its own func
+        ##### should there be any unit conversions done?
         
-
-
-        # put this feature calculation section in its own func
+        traceLet = self.trace.vertices.copy()
+        
+        #need delta t
+        delta_t = self.trialTime/self.trace.vertices.shape[0]
         
         ##### Kinematic scores #####
-        kin_scores = self.kin_scores(mouse_pos_pix,self.msperframe/10**3)
+        kin_scores = self.kin_scores(traceLet,delta_t)
         self.trial_results = {**self.trial_results, **kin_scores }
         
         ## sub sample ##
-        mouse_pos_pix_sub = self.movingmean(mouse_pos_pix,5)
-        mouse_pos_pix_sub = mouse_pos_pix_sub[::3,:] # take every third point
-        kin_scores_sub = self.kin_scores(mouse_pos_pix_sub,self.msperframe/10**3,sub_sampled=True)
+        traceLet_sub = self.movingmean(traceLet,5)
+        traceLet_sub = traceLet_sub[::3,:] # take every third point
+        kin_scores_sub = self.kin_scores(traceLet_sub,(delta_t)*3,sub_sampled=True)
         self.trial_results = {**self.trial_results, **kin_scores_sub}
         
         
         ##### dtw #####
-        dtw_res = self.dtw_features(mouse_pos_pix, self.current_stimulus)
+        print(f'template has size: {self.template_stim.verticesPix.shape}')
+        print(f'stim has shape: {self.current_stimulus.shape}')
+        print(f'trace has shape: {traceLet.shape}')
+        
+        dtw_res = self.dtw_features(traceLet, self.current_stimulus)
         self.trial_results = {**self.trial_results, **dtw_res}
         # think about units here bound to run into issues!
         
         
         
-        
-        
-        
-        ### Can i trust the msperframe to really be constant?! can i use property or lazy prop for this...?
-        ### record time at each point as well?
+        #add metadata
+        self.trial_results['ix_block'] = self.block_idx
+        self.trial_results['ix_trial'] = self.trial_idx
+        self.trial_results['ptt'] = self.ptt
+        self.trial_results['startTStamp'] = self.startTStamp
         
         
     def exit(self):
@@ -539,13 +582,12 @@ class CopyDraw(AbstractParadigm):
         
         """
         ### This is not the same as the kinematic scores in the matlab code!
-        # matlab code uses trialTime instead of delta_t, will need to divide by N
         deriv_var = np.diff(var,axis=0)/delta_t
         deriv_var_norm = norm(deriv_var,axis=1)
         return deriv_var,deriv_var_norm     
     
     
-    @staticmethod
+    @staticmethod # again should this be in a separate file? ie utils
     def movingmean(arr,w_size):
         # trying to mimic some of the functionality from:
         # https://uk.mathworks.com/matlabcentral/fileexchange/41859-moving-average-function
@@ -617,7 +659,7 @@ class CopyDraw(AbstractParadigm):
     def store_trial(self): #what will the purpose of this be?!
         #add to dict or sth save all trials as block?
         
-        #to get these keys need kin_scores (twice, once subsampled, dtw and ... )
+        #to get these keys need kin_scores (twice, once subsampled, dtw and metadata? )
         keys = ['dt','dt_l','w','pathlen','len','dt_norm','speed','speed_sub', 
         'velocity_x','velocity_x_sub','velocity_y','velocity_y_sub','isj',
         'isj_sub', 'isj_x', 'isj_x_sub', 'isj_y', 'isj_y_sub', 'acceleration', 
@@ -644,7 +686,6 @@ class CopyDraw(AbstractParadigm):
         res = {}
         if step_pattern != 'MATLAB':
             alignment = dtw(trace,template,step_pattern=step_pattern,keep_internals=True)
-            
             
             idx_min = np.argmin(alignment.localCostMatrix[-1,1:]) #called pathlen briefly in .m files
             
@@ -708,6 +749,7 @@ class CopyDraw(AbstractParadigm):
         #trial_results['pos_t'] = trial_results['pos_t'].astype('<u2')
         trial_results['pathlen'] += 1
         trial_results['w'] += 1
+        #process delta t error
         trial_results['acceleration'] *= delta_t
         trial_results['acceleration_x'] *= delta_t
         trial_results['acceleration_y'] *= delta_t
@@ -728,7 +770,6 @@ class CopyDraw(AbstractParadigm):
                         print(f'{key} FAILED')
                 else:
                     
-                    
                     check = check_with_tol(data, sample_data[key])
                     
 
@@ -744,10 +785,8 @@ if __name__ == "__main__":
     try:
         test = CopyDraw(None,'./',n_trials=2,finishWhenRaised=True)
         
-        
-        
-        #test.init_block()
-        #test.exec_block()
+        test.init_block()
+        test.exec_block()
         #test.exec_trial(1)
         test.exit()
     except Exception as e:

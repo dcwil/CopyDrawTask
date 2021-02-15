@@ -4,7 +4,7 @@ Created on Thu Dec 17 14:30:26 2020
 
 @author: Daniel
 """
-
+import pandas as pd
 import numpy as np
 import scipy.io
 
@@ -97,8 +97,29 @@ def scale_to_norm_units(array,scaling_matrix=None):
         
     scaled_matrix = np.matmul(scaling_matrix,temp_array.T).T[:,:-1]
     return scaled_matrix,scaling_matrix
+ 
+
+def smooth(shape,return_df=False):       
         
-        
+    # create img
+    df = pd.DataFrame(shape, columns=['x', 'y'])
+    df['dx'] = df.x.diff()
+    df['dy'] = df.y.diff()
+    df['dxma'] = df.dx.rolling(2).mean()
+    df['dyma'] = df.dy.rolling(2).mean()
+    df['dxs'] = 0
+    df['dys'] = 0
+    df['dxs'][:-1] = (df.dx - df.dxma)[1:]
+    df['dys'][:-1] = (df.dy - df.dyma)[1:]
+    df['dxm'] = df.x + df.dxs
+    df['dym'] = df.y + df.dys
+    
+    #first row will be nans, need to replace with og starting points?
+    df['dxm'][0] = df['x'][0]
+    df['dym'][0] = df['y'][0]
+    
+    
+    return df if return_df else df[['dxm','dym']].to_numpy()
     
 #dont need this anymore
 # def load_pixel_data(path_to_mouse_pos_pix):

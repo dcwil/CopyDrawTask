@@ -11,7 +11,7 @@ import numpy as np
 from numpy.linalg import norm
 import matplotlib.pyplot as plt
 
-def dtw_matlab(s,t,*args,w=float('inf')):
+def dtw_matlab(s,t,*args,w=float('inf')):#s is trace, t is template
     
     if s.dtype != 'float64' or t.dtype != 'float64':
         print('Check dtype!')
@@ -31,11 +31,14 @@ def dtw_matlab(s,t,*args,w=float('inf')):
     
     #cache matrix
     D = np.zeros([ns+1,nt+1]) + float('inf') #array of infs
+        
+    C = np.zeros([ns+1,nt+1])
     
     if nt > ns:
         D = D.T
-        
-    C = np.zeros([nt+1,ns+1])
+        C = C.T
+    
+    
     D[0,0] = 0
     
     #begin dynamic processing (i must be higher than j)

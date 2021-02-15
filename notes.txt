@@ -2,11 +2,9 @@
 
 #### Todo  #####
 
-- Interpolate the trace (3rd order poly or splines)
 - replicate saving format (almost done - need trial times to thoroughly check)
 - write scoring function 
 - record scaling factor (from trace to norm units)
-- draw the box (use any of the vertices)
 - when n_trials > number of trials in the file, show repeat trials but randomise and stratify
 - save data in pixel units
 - save some overarching info: total len, path length, speed etc (check matlab, pd_interaktiv)
@@ -14,3 +12,17 @@
 - put in RGB colour values
 - create a YAML for repo
 -  min number of points for smooth curve?
+
+
+#### Questions ####
+- is manyshape thickness and smoothness ok?
+- how fine do we want delta_t? should I record the exact time gap between each point?
+    -> now record the t at each point where do we go from here?
+
+
+#### misc ####
+- using manyshape resutls in ~40 points captured per sec, 80 per sec is for normal
+
+
+
+    
