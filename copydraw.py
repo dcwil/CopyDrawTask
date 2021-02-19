@@ -9,7 +9,7 @@ import scipy.io
 import math
 import time
 import logging
-
+import random
 import utils
 
 from base import AbstractParadigm
@@ -136,38 +136,18 @@ class CopyDraw(AbstractParadigm):
         self.win.color = (-1,-1,-1)
         self.block_name =f'BLOCK_{time.asctime( time.localtime(time.time()) ).replace(":","-")}' if block_name == None else block_name
         self.aspect_ratio = self.win.size[0]/self.win.size[1]
-        self.msperframe,_,_ = self.win.getMsPerFrame()
-        
+        self.msperframe,_,_ = self.win.getMsPerFrame()   
         
         #dropped frames
         self.win.recordFrameIntervals = True
-        
-        
+ 
         self.load_stimuli(self.data_dir / "templates")
-        
-        
+   
         
         ### move object creation out of here? ###
         #instructions
         self.load_instructions(self.data_dir / 'instructions' / 'instructions.png')
-        self.instructions = visual.ImageStim(
-            win=self.win,
-            image=self.instructions_path,
-            pos=(0,0.85))
-    
-        
-        #startpoint
-        self.startpoint_size = 0.05
-        self.startpoint = visual.Rect(win=self.win,
-                                 pos = (-0.8,0.7),
-                                 size=(self.startpoint_size,self.startpoint_size*self.aspect_ratio),
-                                 fillColor='Black',
-                                 lineColor='Cyan')
-        
-        
 
-
-        
         
         #folder for saving
         self.results_dir = Path(self.data_dir,"results",self.session_name,self.block_name)
@@ -177,6 +157,9 @@ class CopyDraw(AbstractParadigm):
         
         #trial index
         self.trial_idx = 1
+        
+        #create template order
+        self.create_template_order(shuffle=True)
         
         
         #log - use this!
@@ -204,6 +187,7 @@ class CopyDraw(AbstractParadigm):
         folder = self.stimuli_fname[:-5]+'.5' if self.stimuli_fname[:-4].endswith('5') else self.stimuli_fname[:-4]
         
         idx_to_fname = {idx:''.join(p) + '.mat' for idx,p in enumerate(permutations(['1','2'] if 'short' in folder else ['1','2','3']))}
+
         
         self.old_stimuli = scipy.io.loadmat(old_stimuli_path / folder / idx_to_fname[stimuli_idx])
         
@@ -224,8 +208,7 @@ class CopyDraw(AbstractParadigm):
         
         # old_stimuli_path = Path(self.data_dir,self.old_template_path)
         # assert old_stimuli_path.exists(), f"old Stimuli data not found: {old_stimuli_path}"
-        
-        
+
         try:
             self.stimuli_file = scipy.io.loadmat(stimuli_path)
             print('loaded mat file')
@@ -233,6 +216,22 @@ class CopyDraw(AbstractParadigm):
         except Exception as e:
             print(e)
         print('stimuli loaded')
+        
+        self.n_templates = self.templates.shape[0]
+        
+    def create_template_order(self,shuffle=True):
+        #requires stimuli to be loaded & n_trials to have been defined
+        if self.n_templates % self.n_trials != 0:
+            #change to a proper warning message?
+            print(f'WARNING: {self.n_trials} trials means that there will be an uneven number of templates')
+        
+        self.order = [ (i % self.n_templates) for i in range(self.n_trials)] 
+        
+        if shuffle:
+            random.shuffle(self.order)
+            
+        
+        
         
         
     def get_stimuli(self, stimuli_idx,scale=True): #how will n_trials > len(templates) work? stratify and randomise
@@ -294,28 +293,30 @@ class CopyDraw(AbstractParadigm):
     def exec_block(self):
         #call exec trial 12? times
         print(f'executing block {self.block_idx}')
+        
+        self.block_results = {}
+        
         for trial_idx in range(self.n_trials):
             self.exec_trial(trial_idx)
-            
+            self.block_results[trial_idx] = self.trial_results
         self.block_idx += 1
         
-    def exec_trial(self,stimuli_idx, scale=True):
-        #display a single copydraw task
         
-        print('executing trial')
+    def draw_and_flip(self,exclude=[]):
+        for element_name,element in self.frame_elements.items():
+            if element_name in exclude:
+                continue
+            else:
+                element.draw()
+        self.win.flip()
+    
+    def create_frame(self,stimuli_idx,scale=True):
         
-        self.trial_results = {}
+        self.frame_elements = {}
         
-        
-        #### refactor all this, put shape creation in a func, and shape drawing in a func ####
-        #### keep all drawn elements in a dict instead? ####
-        
-        
-        ## old style render or new?
         if self.manyshape:
-            #seems like the only way to get thicker lines
-            manyshape_size = 0.035
-            self.template_stim = ManyShapeStim(self.get_stimuli(stimuli_idx,scale=scale),
+            manyshape_size = 0.035 # equates to line thickness
+            self.frame_elements['template'] = ManyShapeStim(self.get_stimuli(stimuli_idx,scale=scale),
                                                 visual.Circle,
                                                 {'win':self.win,
                                                 'units':'norm',
@@ -326,53 +327,54 @@ class CopyDraw(AbstractParadigm):
                                                 },
                                                 size=1.5)
         else:
-            self.template_stim = visual.ShapeStim(win=self.win,
-                    vertices=self.get_stimuli(stimuli_idx,scale=scale),
-                    lineWidth=100, # seems to top out after like 10 or 20: https://github.com/psychopy/psychopy/issues/818
-                    closeShape=False,
-                    interpolate=True,
-                    ori=0,
-                    pos=(0,0),
-                    size=1.5,
-                    units='norm',
-                    fillColor='blue',
-                    lineColor='blue',
-                    #windingRule=True,
-                    )
-
+            self.frame_elements['template'] = visual.ShapeStim(win=self.win,
+                                                    vertices=self.get_stimuli(stimuli_idx,scale=scale),
+                                                    lineWidth=100, # seems to top out after like 10 or 20: https://github.com/psychopy/psychopy/issues/818
+                                                    closeShape=False,
+                                                    interpolate=True,
+                                                    ori=0,
+                                                    pos=(0,0),
+                                                    size=1.5,
+                                                    units='norm',
+                                                    fillColor='blue',
+                                                    lineColor='blue',
+                                                    #windingRule=True,
+                                                    )
+                                                    
         
         
-        self.box = visual.ShapeStim(
-            win=self.win,
-            vertices = self.theBox,#[:4],#np.array([[-0.9,0.9],[0.9,0.9],[0.9,-0.9],[-0.9,-0.9]]),
-            closeShape=True,
-            pos=(0,0),
-            size=1.5,
-            lineColor='white')#[160,160,180])
         
-        self.trial_number = visual.TextStim(
-            win=self.win,
-            text = f'Trial {self.trial_idx}/{self.n_trials}',
-            pos = (0.9,-0.9),
-            units='norm',
-            color='white',
-            height=0.05
-            )
         
-        self.cursor_size = 30
-        self.cursor = visual.Circle(
-            win=self.win,
-            units='pix',
-            size=(self.cursor_size,self.cursor_size),
-            pos=self.template_stim.verticesPix[0],
-            color='red',
-            fillColor='red',
-            lineColor='red'
-            )
+        self.frame_elements['theBox'] = visual.ShapeStim(win=self.win,
+                                                    vertices = self.theBox,
+                                                    closeShape=True,
+                                                    pos=(0,0),
+                                                    size=1.5,
+                                                    lineColor='white')
+        
+        
+        self.frame_elements['trial_number'] = visual.TextStim(
+                                                        win=self.win,
+                                                        text = f'Trial {self.trial_idx}/{self.n_trials}',
+                                                        pos = (0.9,-0.9),
+                                                        units='norm',
+                                                        color='white',
+                                                        height=0.05)
+        
+        
+        self.frame_elements['cursor'] = visual.Circle(
+                                                    win=self.win,
+                                                    units='pix',
+                                                    size=(30,30),
+                                                    pos=self.frame_elements['template'].verticesPix[0],
+                                                    color='red',
+                                                    fillColor='red',
+                                                    lineColor='red'
+                                                    )
         
         #trace
-        self.trace_vertices = [self.template_stim.verticesPix[0]]
-        self.trace = visual.ShapeStim(win=self.win,
+        self.trace_vertices = [self.frame_elements['template'].verticesPix[0]] # could also take this from the cursor
+        self.frame_elements['trace'] = visual.ShapeStim(win=self.win,
                                           units='pix',
                                           vertices=self.trace_vertices,
                                           #colorSpace = 'rgb255',
@@ -380,77 +382,79 @@ class CopyDraw(AbstractParadigm):
                                           lineWidth=2,
                                           interpolate=True,
                                           closeShape=False)
+        
+        
+        self.frame_elements['instructions'] = visual.ImageStim(
+            win=self.win,
+            image=self.instructions_path,
+            pos=(0,0.875))
+        
+        
+        #startpoint
+        startpoint_size = 0.05
+        self.frame_elements['startpoint'] = visual.Rect(win=self.win,
+                                 pos = (-0.8,0.7),
+                                 size=(startpoint_size,startpoint_size*self.aspect_ratio),
+                                 fillColor='Black',
+                                 lineColor='Cyan')
+        
+        
+        self.frame_elements['timebar'] = visual.Rect(win=self.win,
+                                                      pos = (0,-0.85),
+                                                      size=(1,0.025),
+                                                      fillColor='gray')
+        
+        
+        
+        
+    def exec_trial(self,stimuli_idx, scale=True): #should stimuli_idx just be called trial_idx?
+        #display a single copydraw task
+        
+        print('executing trial')
+        
+        self.trial_results = {}
+        
+        #initialise the frame
+        self.create_frame(self.order[stimuli_idx],scale=scale)
+    
         #getting a monitor gamut error when doing rgb colours, look into it
         #self.trace.colorSpace = 'rgb255'
         
-        self.instructions.draw()
-        self.template_stim.draw()
-        self.startpoint.draw()
-        self.cursor.draw()
-        self.trial_number.draw()
-        self.box.draw()
-        self.win.flip()
+        #draw first frame
+        self.draw_and_flip(exclude=['timebar','trace'])
          
         
         #timebar
-        self.timebar = visual.Rect(win=self.win,
-                      pos = (0,-0.85),
-                      size=(1,0.025),
-                      fillColor='gray')
-        timebar_x = self.timebar.size[0]
-
+        timebar_x = self.frame_elements['timebar'].size[0]
         
         #mouse
         self.mouse = event.Mouse()
-        
-        self.startpoint.fillColor = 'Black'
-        #turned_cyan = False
-        
         
         #main bit
         main_loop = True
         started_drawing = False
         while main_loop == True:
             
-        
-            # maybe theres a way to reduce all these draw calls, pack into func perhaps?
-            ### draw_except() <- draws all shapes except those passed in by name?
-            self.template_stim.draw()
-            self.startpoint.draw()
-            self.cursor.draw()
-            self.timebar.draw()
-            self.box.draw()
-            self.trial_number.draw()
+            #only show instructions if startpoint not clicked
+            #self.instructions.draw()
+            if self.frame_elements['startpoint'].fillColor != 'Cyan': 
+                self.draw_and_flip(exclude=['trace'])
+            else:
+                self.draw_and_flip(exclude=['trace','instructions'])
             
-            if self.startpoint.fillColor != 'Cyan': #only show instructions if startpoint not clicked
-                self.instructions.draw()
-            
-            self.win.flip()
-            
-            if self.mouse.isPressedIn(self.startpoint): #click in startpoint
-                self.startpoint.fillColor = 'Cyan'
+            #click in startpoint
+            if self.mouse.isPressedIn(self.frame_elements['startpoint']): 
+                self.frame_elements['startpoint'].fillColor = 'Cyan'
                 tic = clock.getTime()
+                self.draw_and_flip(exclude=['trace','instructions'])
+        
                 
-                
-                #self.instructions.draw()
-                self.template_stim.draw()
-                self.startpoint.draw()
-                self.cursor.draw()
-                self.timebar.draw()
-                self.box.draw()
-                self.trial_number.draw()
-                self.win.flip()
-                #while self.startpoint.contains(self.mouse.getPos()): #start when mouse leaves startpoint
-                
-                
-                
-                
-            if self.startpoint.fillColor == 'Cyan':
+            if self.frame_elements['startpoint'].fillColor == 'Cyan':
 
-                mouse_pos = []
+                #mouse_pos = []
                 
                 # drawing has begun
-                if self.mouse.isPressedIn(self.cursor):
+                if self.mouse.isPressedIn(self.frame_elements['cursor']):
                     
                     started_drawing = True
                     
@@ -472,26 +476,15 @@ class CopyDraw(AbstractParadigm):
                     
                     ### soon to be replaced with countdown timer whileloop to provide more solid timings ###
                     #decreasing timebar
-                    
                     while trial_timer.getTime() > 0:
-                    #for i,frame_n in enumerate(range(trial_dur_frames)):
                         
                         #get remaining time
                         t_remain = trial_timer.getTime()
                         ratio = t_remain/self.trialTime
                         
                         #adjust timebar size and position
-                        self.timebar.setSize([timebar_x*ratio,self.timebar.size[1]])
-                        self.timebar.setPos([(-timebar_x*ratio/2) + timebar_x/2,self.timebar.pos[1]])
-                        
-                        
-                        self.timebar.draw()
-                        #self.instructions.draw()
-                        self.template_stim.draw()
-                        self.startpoint.draw()
-                        self.trial_number.draw()
-                        self.box.draw()
-    
+                        self.frame_elements['timebar'].setSize([timebar_x*ratio,self.frame_elements['timebar'].size[1]])
+                        self.frame_elements['timebar'].setPos([(-timebar_x*ratio/2) + timebar_x/2,self.frame_elements['timebar'].pos[1]])
                         
                             
                         #while mouse is pressed in, update cursor position
@@ -507,18 +500,14 @@ class CopyDraw(AbstractParadigm):
                             self.cursor_t.append(clock.getTime())
                             
                             #move cursor to that position and save for drawing trace
-                            self.cursor.pos = new_pos
+                            self.frame_elements['cursor'].pos = new_pos
                             #self.cursor_idx.append(i)
                             self.trace_vertices.append(new_pos)
-                            self.trace.vertices = self.trace_vertices
-
-                            
-                                
+                            self.frame_elements['trace'].vertices = self.trace_vertices
+          
                         ### ISSUE currently cant do non continuous lines    
                         
-                        self.trace.draw()
-                        self.cursor.draw()
-                        self.win.flip()
+                        self.draw_and_flip(exclude=['instructions'])
                         
                         if not self.mouse.getPressed()[0] and self.finishWhenRaised and started_drawing:
                             print('mouse raised - ending')
@@ -535,10 +524,10 @@ class CopyDraw(AbstractParadigm):
         ##### put this feature calculation section in its own func
         ##### should there be any unit conversions done?
         
-        traceLet = self.trace.vertices.copy()
+        traceLet = self.frame_elements['trace'].vertices.copy()
         
         #need delta t
-        delta_t = self.trialTime/self.trace.vertices.shape[0]
+        delta_t = self.trialTime/self.frame_elements['trace'].vertices.shape[0]
         
         ##### Kinematic scores #####
         kin_scores = self.kin_scores(traceLet,delta_t)
@@ -552,21 +541,26 @@ class CopyDraw(AbstractParadigm):
         
         
         ##### dtw #####
-        print(f'template has size: {self.template_stim.verticesPix.shape}')
+        print(f'template has size: {self.frame_elements["template"].verticesPix.shape}')
         print(f'stim has shape: {self.current_stimulus.shape}')
         print(f'trace has shape: {traceLet.shape}')
         
         dtw_res = self.dtw_features(traceLet, self.current_stimulus)
         self.trial_results = {**self.trial_results, **dtw_res}
         # think about units here bound to run into issues!
-        
-        
+
         
         #add metadata
         self.trial_results['ix_block'] = self.block_idx
         self.trial_results['ix_trial'] = self.trial_idx
         self.trial_results['ptt'] = self.ptt
         self.trial_results['startTStamp'] = self.startTStamp
+        
+        #new metadata
+        if scale:
+            self.trial_results['scaling_matrix'] = self.scaling_matrix
+        
+        self.trial_results['trialTime'] = self.trialTime
         
         
     def exit(self):

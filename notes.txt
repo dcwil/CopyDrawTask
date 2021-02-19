@@ -3,25 +3,29 @@
 #### Todo  #####
 
 - replicate saving format (almost done - need trial times to thoroughly check)
-- write scoring function 
-- record scaling factor (from trace to norm units)
+- write separate scoring function 
 - when n_trials > number of trials in the file, show repeat trials but randomise and stratify
-- save data in pixel units
 - save some overarching info: total len, path length, speed etc (check matlab, pd_interaktiv)
 - add in ability to draw broken lines (when finishWhenRaise == False)
-- put in RGB colour values
+- put in RGB colour values (monitor gamut error)
 - create a YAML for repo
 -  min number of points for smooth curve?
+- overall, how does one decide whether a func should be imported or be a method?
 
 
 #### Questions ####
-- is manyshape thickness and smoothness ok?
+- is manyshape thickness and smoothness ok? (if its going to be used)
 - how fine do we want delta_t? should I record the exact time gap between each point?
-    -> now record the t at each point where do we go from here?
+    -> now record the t at each point where do we go from here? calculate an avg anduse that (current)
+- dict format is basically ready for saving, but should the saving be in matlab format also?
+- where should number of trials be specified? when creatin the obj or for each individual block?
+- when shuffling the order or the trials, should they be shuffled in such a way taht the same trial isnt
+shown twice in succession?
 
 
 #### misc ####
-- using manyshape resutls in ~40 points captured per sec, 80 per sec is for normal
+- using manyshape resutls in ~35 points captured per sec, 70 per sec is for normal
+- need to check indexing, and decide on a convention (trial_idx starts from 1 but stimuli_idx 0)
 
 
 
