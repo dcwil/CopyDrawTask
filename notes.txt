@@ -2,8 +2,7 @@
 
 #### Todo  #####
 
-- replicate saving format (almost done - need trial times to thoroughly check)
-- write separate scoring function 
+- replicate saving format (almost done - need trial times to thoroughly check) 
 - when n_trials > number of trials in the file, show repeat trials but randomise and stratify
 - save some overarching info: total len, path length, speed etc (check matlab, pd_interaktiv)
 - add in ability to draw broken lines (when finishWhenRaise == False)
@@ -11,6 +10,8 @@
 - create a YAML for repo
 -  min number of points for smooth curve?
 - overall, how does one decide whether a func should be imported or be a method?
+- write docstrings, clean up code etc
+- log messages arent writing to log file ,fix
 
 
 #### Questions ####
@@ -21,12 +22,35 @@
 - where should number of trials be specified? when creatin the obj or for each individual block?
 - when shuffling the order or the trials, should they be shuffled in such a way taht the same trial isnt
 shown twice in succession?
+- units?
+- sample data does not match matlab results
+- inceasing trace thickenss suffers from same problems as template in terms of interpolation
 
 
 #### misc ####
 - using manyshape resutls in ~35 points captured per sec, 70 per sec is for normal
 - need to check indexing, and decide on a convention (trial_idx starts from 1 but stimuli_idx 0)
+- dropped frames occur between trials, not during (i think)
 
 
 
-    
+### meeting #####
+16:10 ratio screen
+generate drawn images from templates, use matplotlib or plotly
+mayeb separate program sep traceautomated, recford mouse movement use both
+print out timestep
+hisogram delta t
+
+compare thickness in matlab!!!
+
+remove shuffles with successive templates, make an option
+
+dict in list!
+
+save with pandas df (pickles or hdf or csv) <- look at different sizes and speeds (csv if below 300mb)
+
+cm or m per second
+
+check matlab for units (keep same units as matlab)
+
+static image next

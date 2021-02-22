@@ -25,6 +25,8 @@ from dtw_matlab import dtw_matlab
 
 from scipy.interpolate import splprep, splev
 
+from template_image import template_to_image
+
 logger = logging.getLogger('CopyDraw')
 #logger.setLevel(logging.DEBUG)
 
@@ -103,7 +105,7 @@ class CopyDraw(AbstractParadigm):
                  image_size=2,
                  n_letters=3,
                  finishWhenRaised=True,
-                 screen_size = (1920, 1080),
+                 screen_size = (1920, 1200), #16:10 ratio
                  screen_ix = 0,
                  flip=True,
                  lpt_address = None,
@@ -344,6 +346,21 @@ class CopyDraw(AbstractParadigm):
                                                     lineColor='blue',
                                                     #windingRule=True,
                                                     )
+            
+            
+            #this would replace template from above ^ 
+            #if you want to run without the original template in, comment out and change the name below to just "template"
+            self.frame_elements['template_new'] = visual.ImageStim(win=self.win,
+                                                               image=template_to_image(self.get_stimuli(stimuli_idx,scale=scale),
+                                                                                       f'test_{stimuli_idx}',
+                                                                                       'template_images',
+                                                                                       lineWidth=4),
+                                                               
+                                                               #this is from visual inspection - still not quite right
+                                                               size=1.69,
+                                                               interpolate=True,
+                                                               pos=(-0.001,-0.002),
+                                                               units='norm')
                                                     
         
         
@@ -383,7 +400,7 @@ class CopyDraw(AbstractParadigm):
                                           vertices=self.trace_vertices,
                                           #colorSpace = 'rgb255',
                                           lineColor='red',
-                                          lineWidth=2,
+                                          lineWidth=5,
                                           interpolate=True,
                                           closeShape=False)
         
@@ -473,8 +490,7 @@ class CopyDraw(AbstractParadigm):
                     self.cursor_t = [self.startTStamp]
                     
                     
-                    
-                    ### soon to be replaced with countdown timer whileloop to provide more solid timings ###
+                    c = 0
                     #decreasing timebar
                     while trial_timer.getTime() > 0:
                         
@@ -506,9 +522,9 @@ class CopyDraw(AbstractParadigm):
                             self.frame_elements['trace'].vertices = self.trace_vertices
           
                         ### ISSUE currently cant do non continuous lines    
-                        
-                        self.draw_and_flip(exclude=['instructions'])
-                        
+                        if c%2 == 0: #only draw every other frame, increases sf
+                            self.draw_and_flip(exclude=['instructions'])
+                        c += 1
                         if not self.mouse.getPressed()[0] and self.finishWhenRaised and started_drawing:
                             print('mouse raised - ending')
                             main_loop = False
@@ -540,6 +556,7 @@ class CopyDraw(AbstractParadigm):
         
         self.trial_results['trialTime'] = self.trialTime
         self.trial_results['flip'] = self.flip
+        #do i need to add theWord?
         
     def exit(self):
         self.finish_block()
@@ -570,6 +587,18 @@ class CopyDraw(AbstractParadigm):
         # think about units here bound to run into issues!
         dtw_res = self.dtw_features(traceLet, template)
         trial_results = {**trial_results, **dtw_res}
+        
+        
+        #misc
+        # +1 on the pathlens bc matlab indexing
+        trial_results['dist_t'] = np.sqrt(np.sum((template[trial_results['w'].astype(int)[:trial_results['pathlen']+1,0],:] - trial_results['pos_t'][trial_results['w'].astype(int)[:trial_results['pathlen']+1,1]])**2,axis=1))
+        
+        # normalize distance dt by length of copied template (in samples)
+        trial_results['dt_norm'] = trial_results['dt_l'] / (trial_results['pathlen']+1)
+        
+        # get length of copied part of the template (in samples)
+        trial_results['len'] = (trial_results['pathlen']+1) / len(template)
+        
         
         return trial_results
         
@@ -784,7 +813,7 @@ class CopyDraw(AbstractParadigm):
     
 if __name__ == "__main__":
     try:
-        test = CopyDraw(None,'./',n_trials=2,finishWhenRaised=True)
+        test = CopyDraw(None,'./',n_trials=2,finishWhenRaised=True, manyshape=False,trialTime=2.7)
         
         test.init_block()
         test.exec_block()
