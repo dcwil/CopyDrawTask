@@ -170,7 +170,7 @@ class CopyDraw(AbstractParadigm):
                                       - %(message)s')
         fh.setFormatter(formatter)
         logger.addHandler(fh)
-        logger.info('Block initialised')
+        logger.info(f'Block "{self.block_name}" initialised')
 
 
     def load_instructions(self, path):
@@ -251,15 +251,12 @@ class CopyDraw(AbstractParadigm):
                 newboxarray[0:2] = self.theBox[0:2]
                 newboxarray[2],newboxarray[3] = self.theBox[3],self.theBox[2]
                 self.theBox = newboxarray
-                
-                
-                
+
                 
                 print('scaled')
                 if self.flip:
                     self.current_stimulus = np.matmul(self.current_stimulus, np.array([[1,0],[0,-1]]))
                     self.theBox = np.matmul(self.theBox, np.array([[1,0],[0,-1]]))
-                    
                     
             
             if self.interp == 'smooth':        
@@ -296,10 +293,17 @@ class CopyDraw(AbstractParadigm):
         
         self.block_results = {}
         
-        for trial_idx in range(self.n_trials):
-            self.exec_trial(trial_idx)
-            self.block_results[trial_idx] = self.trial_results
+        for stimuli_idx in range(self.n_trials):
+            self.exec_trial(stimuli_idx)
+            self.trial_idx += 1
+            #run some kind of check_trial func here?
+            self.block_results[stimuli_idx] = self.trial_results
         self.block_idx += 1
+        
+        
+    def save_block(self):
+        #take stored trials and actually save them?
+        pass
         
         
     def draw_and_flip(self,exclude=[]):
@@ -387,7 +391,7 @@ class CopyDraw(AbstractParadigm):
         self.frame_elements['instructions'] = visual.ImageStim(
             win=self.win,
             image=self.instructions_path,
-            pos=(0,0.875))
+            pos=(0,0.95))
         
         
         #startpoint
@@ -411,9 +415,7 @@ class CopyDraw(AbstractParadigm):
         #display a single copydraw task
         
         print('executing trial')
-        
-        self.trial_results = {}
-        
+
         #initialise the frame
         self.create_frame(self.order[stimuli_idx],scale=scale)
     
@@ -436,7 +438,6 @@ class CopyDraw(AbstractParadigm):
         while main_loop == True:
             
             #only show instructions if startpoint not clicked
-            #self.instructions.draw()
             if self.frame_elements['startpoint'].fillColor != 'Cyan': 
                 self.draw_and_flip(exclude=['trace'])
             else:
@@ -451,8 +452,7 @@ class CopyDraw(AbstractParadigm):
                 
             if self.frame_elements['startpoint'].fillColor == 'Cyan':
 
-                #mouse_pos = []
-                
+
                 # drawing has begun
                 if self.mouse.isPressedIn(self.frame_elements['cursor']):
                     
@@ -520,35 +520,13 @@ class CopyDraw(AbstractParadigm):
                     main_loop = False
                     
             
-
-        ##### put this feature calculation section in its own func
         ##### should there be any unit conversions done?
         
         traceLet = self.frame_elements['trace'].vertices.copy()
         
-        #need delta t
-        delta_t = self.trialTime/self.frame_elements['trace'].vertices.shape[0]
+        #scoring
+        self.trial_results = self.computeScoreSingleTrial(traceLet, self.current_stimulus, self.trialTime)
         
-        ##### Kinematic scores #####
-        kin_scores = self.kin_scores(traceLet,delta_t)
-        self.trial_results = {**self.trial_results, **kin_scores }
-        
-        ## sub sample ##
-        traceLet_sub = self.movingmean(traceLet,5)
-        traceLet_sub = traceLet_sub[::3,:] # take every third point
-        kin_scores_sub = self.kin_scores(traceLet_sub,(delta_t)*3,sub_sampled=True)
-        self.trial_results = {**self.trial_results, **kin_scores_sub}
-        
-        
-        ##### dtw #####
-        print(f'template has size: {self.frame_elements["template"].verticesPix.shape}')
-        print(f'stim has shape: {self.current_stimulus.shape}')
-        print(f'trace has shape: {traceLet.shape}')
-        
-        dtw_res = self.dtw_features(traceLet, self.current_stimulus)
-        self.trial_results = {**self.trial_results, **dtw_res}
-        # think about units here bound to run into issues!
-
         
         #add metadata
         self.trial_results['ix_block'] = self.block_idx
@@ -561,11 +539,42 @@ class CopyDraw(AbstractParadigm):
             self.trial_results['scaling_matrix'] = self.scaling_matrix
         
         self.trial_results['trialTime'] = self.trialTime
-        
+        self.trial_results['flip'] = self.flip
         
     def exit(self):
         self.finish_block()
         #core.quit()
+        
+    def computeScoreSingleTrial(self,traceLet,template,trialTime):
+        
+        trial_results = {}
+        
+        #compute avg delta_t
+        delta_t = trialTime/traceLet.shape[0]
+        
+        ##### Kinematic scores #####
+        kin_scores = self.kin_scores(traceLet,delta_t)
+        trial_results = {**trial_results, **kin_scores }
+        
+        ## sub sample ##
+        traceLet_sub = self.movingmean(traceLet,5)
+        traceLet_sub = traceLet_sub[::3,:] # take every third point
+        kin_scores_sub = self.kin_scores(traceLet_sub,(delta_t)*3,sub_sampled=True)
+        trial_results = {**trial_results, **kin_scores_sub}
+        
+        ##### dtw #####
+        print(f'template has size: {self.frame_elements["template"].verticesPix.shape}')
+        print(f'stim has shape: {self.current_stimulus.shape}')
+        print(f'trace has shape: {traceLet.shape}')
+        
+        # think about units here bound to run into issues!
+        dtw_res = self.dtw_features(traceLet, template)
+        trial_results = {**trial_results, **dtw_res}
+        
+        return trial_results
+        
+        
+        
 
     #should these static methods bein utils instead?
     @staticmethod
@@ -649,7 +658,7 @@ class CopyDraw(AbstractParadigm):
         
         return kin_res
         
-        
+    #can maybe remove this
     def store_trial(self): #what will the purpose of this be?!
         #add to dict or sth save all trials as block?
         
@@ -671,9 +680,7 @@ class CopyDraw(AbstractParadigm):
         
         #del trial_results after? or reset to empty dict?
         
-    def save_block(self):
-        #take stored trials and actually save them?
-        pass
+    
     
     @staticmethod # again, should this be in a separate file?
     def dtw_features(trace,template,step_pattern='MATLAB'):
