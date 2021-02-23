@@ -537,7 +537,7 @@ class CopyDraw(AbstractParadigm):
         self.trial_results['ptt'] = self.ptt
         self.trial_results['startTStamp'] = self.startTStamp
         
-        #new metadata
+        #new/extra metadata
         if scale:
             self.trial_results['scaling_matrix'] = self.scaling_matrix
         
@@ -555,6 +555,8 @@ class CopyDraw(AbstractParadigm):
         
         #in matlab i think this is theRect
         self.trial_results['winSize'] = self.win.size
+        
+        self.trial_results['templatePix'] = self.frame_elements['template'].verticesPix
         #do i need to add theWord?
         
     def exit(self):

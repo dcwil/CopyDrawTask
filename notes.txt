@@ -17,7 +17,7 @@
 - in matlab, individual trials are saved as well as the block but the values are the same
 - need to copy perfomance analysis plot each blocks performance
 - need to calculate score for each trial, matlab generates a 0 for this though
-    > port pixtoim
+    > port pixtoim then getscore properly
 
 
 #### Questions ####

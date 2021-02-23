@@ -5,10 +5,7 @@ Created on Tue Feb 23 12:04:11 2021
 @author: Daniel
 """
 
-import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
-
 from scipy.signal import convolve2d
 
 
@@ -54,15 +51,19 @@ def conv2(x, y, mode='same'):
 
 
 
-def pixToIm(pixLet,theBoxPix,winSize,sz=50,reach=12):
+def pixToIm(pixLett,theBoxPix,winSize,sz=50,reach=12):
     #values are relative to 0,0 at center of screen, will need to shift
     shift_x = winSize[0]/2
     shift_y = winSize[1]/2
     
+    #if you dont copy, everything gets all messed up
+    theBox = theBoxPix.copy()
+    pixLet = pixLett.copy()
+    
     pixLet[:,0] += shift_x
     pixLet[:,1] += shift_y
-    theBoxPix[:,0] += shift_x
-    theBoxPix[:,1] += shift_y
+    theBox[:,0] += shift_x
+    theBox[:,1] += shift_y
     
     im = np.zeros(winSize)
     for i,(px,py) in enumerate(pixLet):
@@ -71,7 +72,7 @@ def pixToIm(pixLet,theBoxPix,winSize,sz=50,reach=12):
         
         #need to ignore jumps outside of the Box
         if in_box((px,py),theBox):
-            im[px,-py] = 1
+            im[px,py] = 1
             
     blur = matlab_style_gauss2D(shape=(sz,sz),sigma=reach)
     gausIm = conv2(im,blur)
@@ -80,16 +81,22 @@ def pixToIm(pixLet,theBoxPix,winSize,sz=50,reach=12):
     
 
 if __name__ == '__main__':
+    
+    import matplotlib.pyplot as plt
+    import pandas as pd
     df = pd.read_pickle('results/TEST_SESSION/TEST_BLOCK/scores_copyDraw_block1.pkl')
     
     pixLet = df.loc['pos_t'][0]
     theBox = df.loc['theBoxPix'][0]
     winSize = df.loc['winSize'][0]
+    target = df.loc['templatePix'][0]
+    
+    print(theBox)
     
     plt.figure()
     plt.plot(pixLet.T[0],pixLet.T[1],label='og')
     plt.plot(theBox.T[0],theBox.T[1],label='og')
-    
+    plt.plot(target.T[0],target.T[1],label='og')
     
     sz=50
     reach = 12
@@ -102,9 +109,13 @@ if __name__ == '__main__':
     pixLet[:,1] += shift_y
     theBox[:,0] += shift_x
     theBox[:,1] += shift_y
+    target[:,0] += shift_x
+    target[:,1] += shift_y
+    
     
     plt.plot(pixLet.T[0],pixLet.T[1],label='shifted')
     plt.plot(theBox.T[0],theBox.T[1],label='shifted')
+    plt.plot(target.T[0],target.T[1],label='shifted')
     
     win = np.array([[0,winSize[1]],
                     [0,0],
@@ -117,8 +128,7 @@ if __name__ == '__main__':
     im = np.zeros(winSize)
     
     #detecting linebreaks should go here, currently code doesnt "handle" it though
-    
-
+    ####
     
     for i,(px,py) in enumerate(pixLet):
         px = int(np.round(px))
@@ -126,16 +136,35 @@ if __name__ == '__main__':
         
         #need to ignore jumps outside of the Box
         if in_box((px,py),theBox):
-            im[px,-py] = 1 #not sure why y gets flipped
-        
-    plt.figure(figsize=(16,10))
-    plt.imshow(im.T)
+            im[px,py] = 1 
 
     
     blur = matlab_style_gauss2D(shape=(sz,sz),sigma=reach)
     gausIm = conv2(im,blur)
     
+    
     plt.figure(figsize=(16,10))
-    plt.imshow(gausIm.T)
+    plt.imshow(gausIm)
+    
+    
+    im = np.zeros(winSize)
+    
+    for i,(px,py) in enumerate(target):
+        px = int(np.round(px))
+        py = int(np.round(py))
+        
+        #need to ignore jumps outside of the Box
+        if in_box((px,py),theBox):
+            im[px,py] = 1 
+            
+        
+    blur = matlab_style_gauss2D(shape=(sz,sz),sigma=reach)
+    gausIm = conv2(im,blur)
+    
+    
+    plt.figure(figsize=(16,10))
+    plt.imshow(gausIm)
 
-
+    gausIm, _,_ = pixToIm(target,theBox,winSize)
+    plt.figure(figsize=(16,10))
+    plt.imshow(gausIm)
