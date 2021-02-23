@@ -5,6 +5,7 @@ Created on Mon Nov 30 10:59:38 2020
 @author: Daniel
 """
 import numpy as np
+import pandas as pd
 import scipy.io
 import math
 import time
@@ -31,27 +32,6 @@ logger = logging.getLogger('CopyDraw')
 #logger.setLevel(logging.DEBUG)
 
 
-##### How the data is saved #####
-# folder for each block named: copyDraw_blockMM
-# where MM is the block number
-#
-# Each Trial (single trace) has its own mat file: tscore_NcopyDraw_blockMM.mat
-# where N is the trial number and MM is the block number
-# ->  inside the mat file is a dict containing: 
-#       > templateLet : 2d array, template pixels i think
-#       > theBox : not sure yet - the box around the template?
-#       > id : 1 col, n rows, n is number of names? 
-#       > traceLet : 2d array, the trace in pixels
-#       > trialTime : float
-#       > preTrialTime :float
-#       > trialStart : 64 unsigned int (tic without toc)
-#       > score : int?
-#       > theWord : 3 digit str signifying the template that was used  
-# 
-# 
-#
-#####
-
 # boxColour = [160,160,180]
 # boxHeight = 200
 # boxLineWidth = 6
@@ -64,11 +44,6 @@ logger = logging.getLogger('CopyDraw')
 # textColour = [153, 153, 255]
 #timeCOlour = [180, 180, 160]
 
-# timebar does not start until cursor is clicked
-
-#grey box around template!
-
-# if finishwhenraised is false can draw non continous lines
 
 
 class ManyShapeStim():
@@ -232,6 +207,11 @@ class CopyDraw(AbstractParadigm):
         if shuffle:
             random.shuffle(self.order)
             
+            #reshuffle to remove repeated trials showing
+            while 0 in np.diff(np.array(self.order)):
+                random.shuffle(self.order)
+                
+            
         
         
         
@@ -304,9 +284,13 @@ class CopyDraw(AbstractParadigm):
         
         
     def save_block(self):
-        #take stored trials and actually save them?
-        pass
-        
+        #rudimentary atm, can ble cleaned up, flattened a little maybe
+        self.df = pd.DataFrame(self.block_results)
+        self.df.to_csv(self.results_dir / f'scores_copyDraw_block{self.block_idx}.csv') # change naming convention  
+        if Path(self.results_dir / 'scores.csv').exists():
+            print('saved!')
+        else:
+            print('failed saving somehow')
         
     def draw_and_flip(self,exclude=[]):
         for element_name,element in self.frame_elements.items():
@@ -351,8 +335,9 @@ class CopyDraw(AbstractParadigm):
             #this would replace template from above ^ 
             #if you want to run without the original template in, comment out and change the name below to just "template"
             self.frame_elements['template_new'] = visual.ImageStim(win=self.win,
+                                                                   #currently this is rewriting the image each time - need one that opens the image if its there before remaking it
                                                                image=template_to_image(self.get_stimuli(stimuli_idx,scale=scale),
-                                                                                       f'test_{stimuli_idx}',
+                                                                                       f'{self.stimuli_fname[:-4]}_{stimuli_idx}',
                                                                                        'template_images',
                                                                                        lineWidth=4),
                                                                
@@ -540,6 +525,9 @@ class CopyDraw(AbstractParadigm):
         
         traceLet = self.frame_elements['trace'].vertices.copy()
         
+        
+        ## in matlab the traces and templates are stored and scoring is computed at the end of the block
+        ## should this follow the same pipeline (would reduce delays between presenting trials)
         #scoring
         self.trial_results = self.computeScoreSingleTrial(traceLet, self.current_stimulus, self.trialTime)
         
@@ -813,12 +801,18 @@ class CopyDraw(AbstractParadigm):
     
 if __name__ == "__main__":
     try:
-        test = CopyDraw(None,'./',n_trials=2,finishWhenRaised=True, manyshape=False,trialTime=2.7)
+        test = CopyDraw(None,'./',
+                        n_trials=2,
+                        finishWhenRaised=True,
+                        manyshape=False,
+                        trialTime=2.7,session_name='TEST_SESSION')
         
         test.init_block()
         test.exec_block()
-        #test.exec_trial(1)
+        test.save_block(block_name='TEST_BLOCK')
         test.exit()
+        
+    #this still isnt printing the error out, why?
     except Exception as e:
         core.quit()
         print(e)

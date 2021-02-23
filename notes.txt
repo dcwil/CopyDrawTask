@@ -12,6 +12,10 @@
 - overall, how does one decide whether a func should be imported or be a method?
 - write docstrings, clean up code etc
 - log messages arent writing to log file ,fix
+- compute blockwise performance in one func, remove feature calculation from happening during the trial
+    > dynamic saving? write traces to file during experiment, calc data afterwards?
+- fix image template - open dont replace 
+- in matlab, individual trials are saved as well as the block but the values are the same
 
 
 #### Questions ####
@@ -43,7 +47,6 @@ hisogram delta t
 
 compare thickness in matlab!!!
 
-remove shuffles with successive templates, make an option
 
 dict in list!
 

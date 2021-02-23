@@ -26,12 +26,15 @@ plt.savefig('test.png',format='png',bbox_inches='tight',transparent=True)
 
 #move to utils?
 def template_to_image(template,fname,path,**kwargs):
-    plt.figure(figsize=(16,10))
-    plt.plot(template.T[0],template.T[1],**kwargs)
-    ax = plt.axes()
-    ax.xaxis.set_major_locator(ticker.NullLocator()) 
-    ax.yaxis.set_major_locator(ticker.NullLocator()) 
     
     fullpath = Path(path,f'{fname}.png' )
-    plt.savefig(fullpath,format='png',bbox_inches='tight',transparent=True,dpi=300)
+    
+    if not fullpath.exists():
+        plt.figure(figsize=(16,10))
+        plt.plot(template.T[0],template.T[1],**kwargs) #how can i remove this from being shown?
+        ax = plt.axes()
+        ax.xaxis.set_major_locator(ticker.NullLocator()) 
+        ax.yaxis.set_major_locator(ticker.NullLocator()) 
+        plt.savefig(fullpath,format='png',bbox_inches='tight',transparent=True,dpi=300)
+        
     return fullpath
