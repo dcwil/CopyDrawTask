@@ -113,7 +113,7 @@ class CopyDraw(AbstractParadigm):
         self.win.color = (-1,-1,-1)
         self.block_name =f'BLOCK_{time.asctime( time.localtime(time.time()) ).replace(":","-")}' if block_name == None else block_name
         self.aspect_ratio = self.win.size[0]/self.win.size[1]
-        self.msperframe,_,_ = self.win.getMsPerFrame()   
+        self.msperframe,_,_ = self.win.getMsPerFrame()   #this is redundant now?
         
         #dropped frames
         self.win.recordFrameIntervals = True
@@ -164,20 +164,20 @@ class CopyDraw(AbstractParadigm):
         folder = self.stimuli_fname[:-5]+'.5' if self.stimuli_fname[:-4].endswith('5') else self.stimuli_fname[:-4]
         
         idx_to_fname = {idx:''.join(p) + '.mat' for idx,p in enumerate(permutations(['1','2'] if 'short' in folder else ['1','2','3']))}
-
         
-        self.old_stimuli = scipy.io.loadmat(old_stimuli_path / folder / idx_to_fname[stimuli_idx])
+        self.old_stimuli_path = old_stimuli_path / folder / idx_to_fname[stimuli_idx]     
+        self.old_stimuli = scipy.io.loadmat(self.old_stimuli_path,simplify_cells=True)
         
         return self.old_stimuli[template_or_box]
     
     
     def get_box(self,idx):
         box = self.get_old_stimuli(idx)
-        self.theBox = box[0,0][0].T.astype(float)
+        self.theBox = box['boxPos'].T#box[0,0][0].T.astype(float)
         return self.theBox
         
     
-    def load_stimuli(self, path, short=True, size=35):
+    def load_stimuli(self, path, short=True, size=35): #swap short arg for n_letters
         self.stimuli_fname = f'Size_{"short_" if short else ""}{size}.mat'
         stimuli_path = Path(path, self.stimuli_fname)
         print(f'loading stimuli: {stimuli_path}')
@@ -228,7 +228,6 @@ class CopyDraw(AbstractParadigm):
                 self.theBox,_ = utils.scale_to_norm_units(self.theBox,scaling_matrix=self.scaling_matrix)
                 
                 #reorder
-                #self.theBox[-1],self.theBox[-2] = self.theBox[-2].copy(),self.theBox[-1].copy()
                 newboxarray = np.zeros([4,2])
                 newboxarray[0:2] = self.theBox[0:2]
                 newboxarray[2],newboxarray[3] = self.theBox[3],self.theBox[2]
@@ -286,12 +285,12 @@ class CopyDraw(AbstractParadigm):
     def save_block(self):
         #rudimentary atm, can ble cleaned up, flattened a little maybe
         self.df = pd.DataFrame(self.block_results)
-        self.df.to_csv(self.results_dir / f'scores_copyDraw_block{self.block_idx}.csv') # change naming convention  
-        if Path(self.results_dir / 'scores.csv').exists():
-            print('saved!')
-        else:
-            print('failed saving somehow')
         
+        #csv had formatting issues
+        self.df.to_pickle(self.results_dir / f'scores_copyDraw_block{self.block_idx}.pkl')
+
+
+    #draw order is based on .draw() call order, consider using an ordered dict?
     def draw_and_flip(self,exclude=[]):
         for element_name,element in self.frame_elements.items():
             if element_name in exclude:
@@ -544,6 +543,18 @@ class CopyDraw(AbstractParadigm):
         
         self.trial_results['trialTime'] = self.trialTime
         self.trial_results['flip'] = self.flip
+        self.trial_results['theBox'] = self.frame_elements['theBox'].vertices.copy()
+        
+
+        self.trial_results['theBoxPix'] = self.frame_elements['theBox'].verticesPix
+        
+        
+        traceLetPix = self.frame_elements['trace'].verticesPix.copy()
+        if (traceLet != traceLetPix).any():
+            self.trial_results['pos_t_pix'] = traceLetPix
+        
+        #in matlab i think this is theRect
+        self.trial_results['winSize'] = self.win.size
         #do i need to add theWord?
         
     def exit(self):
@@ -801,15 +812,15 @@ class CopyDraw(AbstractParadigm):
     
 if __name__ == "__main__":
     try:
-        test = CopyDraw(None,'./',
+        test = CopyDraw('TEST_SESSION','./',
                         n_trials=2,
                         finishWhenRaised=True,
                         manyshape=False,
-                        trialTime=2.7,session_name='TEST_SESSION')
+                        trialTime=2.7)
         
-        test.init_block()
+        test.init_block(block_name='TEST_BLOCK')
         test.exec_block()
-        test.save_block(block_name='TEST_BLOCK')
+        test.save_block()
         test.exit()
         
     #this still isnt printing the error out, why?

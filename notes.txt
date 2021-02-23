@@ -3,7 +3,6 @@
 #### Todo  #####
 
 - replicate saving format (almost done - need trial times to thoroughly check) 
-- when n_trials > number of trials in the file, show repeat trials but randomise and stratify
 - save some overarching info: total len, path length, speed etc (check matlab, pd_interaktiv)
 - add in ability to draw broken lines (when finishWhenRaise == False)
 - put in RGB colour values (monitor gamut error)
@@ -16,6 +15,9 @@
     > dynamic saving? write traces to file during experiment, calc data afterwards?
 - fix image template - open dont replace 
 - in matlab, individual trials are saved as well as the block but the values are the same
+- need to copy perfomance analysis plot each blocks performance
+- need to calculate score for each trial, matlab generates a 0 for this though
+    > port pixtoim
 
 
 #### Questions ####
