@@ -31,7 +31,7 @@ shown twice in succession?
 - units?
 - sample data does not match matlab results
 - inceasing trace thickenss suffers from same problems as template in terms of interpolation
-
+- how close do scores need to be to matlab ones?
 
 #### misc ####
 - using manyshape resutls in ~35 points captured per sec, 70 per sec is for normal
