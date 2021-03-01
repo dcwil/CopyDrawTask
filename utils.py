@@ -143,3 +143,48 @@ def simple_plot(arr, kind='plot'):
     #figure()
     types = {'plot':plot,'scatter':scatter}
     types[kind](arr[:,0],arr[:,1])
+    
+    
+
+def movingmean(arr,w_size):
+    # trying to mimic some of the functionality from:
+    # https://uk.mathworks.com/matlabcentral/fileexchange/41859-moving-average-function
+    # which i think is the function used in compute_scoreSingleTrial.m (not in matlab by default)
+    
+    #returns an array of the same size by shrinking the window for the start and end points
+    
+    #round even window sizes down
+    if w_size%2 == 0:
+        w_size -= 1
+    
+    w_tail = np.floor(w_size/2)
+    
+    arr_sub = np.zeros_like(arr)
+    
+    for j,col in enumerate(arr.T): # easier to work with columns like this
+        for i,val in enumerate(col):
+            
+            #truncate window if needed
+            start = i - w_tail if i > w_tail else 0
+            stop = i + w_tail + 1 if i + w_tail < len(col) else len(col)
+            s = slice(int(start),int(stop))
+            
+            #idxs reversed bc .T
+            arr_sub[i,j] = np.mean(col[s])
+            
+            #could probably find a way to do this both cols at the same time
+    
+    return arr_sub
+
+
+
+def deriv_and_norm(var,delta_t):
+    """
+    Given an array (var) and timestep (delta_t), computes the derivative 
+    for each timepoint and returns it (along with the magnitudes)
+    
+    """
+    ### This is not the same as the kinematic scores in the matlab code!
+    deriv_var = np.diff(var,axis=0)/delta_t
+    deriv_var_norm = norm(deriv_var,axis=1)
+    return deriv_var,deriv_var_norm  

@@ -12,16 +12,16 @@ import scipy.io as sio
 
 from pathlib import Path
 
-templates = sio.loadmat('templates/Size_20.mat',simplify_cells=True)
-test_template = templates['new_shapes'][4]
+# templates = sio.loadmat('templates/Size_20.mat',simplify_cells=True)
+# test_template = templates['new_shapes'][4]
 
-plt.figure()
-plt.plot(test_template.T[0],test_template.T[1],lineWidth=5)
-ax =plt.axes()
-#ax.set_facecolor('black')
-ax.xaxis.set_major_locator(ticker.NullLocator()) 
-ax.yaxis.set_major_locator(ticker.NullLocator()) 
-plt.savefig('test.png',format='png',bbox_inches='tight',transparent=True)
+# plt.figure()
+# plt.plot(test_template.T[0],test_template.T[1],lineWidth=5)
+# ax =plt.axes()
+# #ax.set_facecolor('black')
+# ax.xaxis.set_major_locator(ticker.NullLocator()) 
+# ax.yaxis.set_major_locator(ticker.NullLocator()) 
+# plt.savefig('test.png',format='png',bbox_inches='tight',transparent=True)
 
 
 #move to utils?
@@ -35,6 +35,7 @@ def template_to_image(template,fname,path,**kwargs):
         ax = plt.axes()
         ax.xaxis.set_major_locator(ticker.NullLocator()) 
         ax.yaxis.set_major_locator(ticker.NullLocator()) 
+        plt.tight_layout(pad=0)
         plt.savefig(fullpath,format='png',bbox_inches='tight',transparent=True,dpi=300)
         
     return fullpath

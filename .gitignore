@@ -7,6 +7,9 @@ results/
 sample_data/
 template_images/
 
+#profiling
+*.prof
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
