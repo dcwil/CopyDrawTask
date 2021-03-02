@@ -5,7 +5,7 @@ Created on Wed Nov 11 10:00:46 2020
 @author: Daniel
 """
 
-#code taken from https://github.com/bsdlab/MDDInfer
+# code taken from https://github.com/bsdlab/MDDInfer
 
 import abc
 #import pdb

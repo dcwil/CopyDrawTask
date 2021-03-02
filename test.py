@@ -38,3 +38,80 @@ CD = CopyDraw(None,'./',n_trials=2,finishWhenRaised=True)
 for t in [2.2,2.7,3,6.00555]:
     print(t)
     CD.check_results(test_trial,test_template,trial_time=t)
+
+# # move this outta here
+# def check_results(self, sample_data, template, trial_time=2.7*3):
+#     trial_results = {}
+#
+#     pos_t = sample_data['pos_t'].copy().astype(float)
+#
+#     delta_t = trial_time / len(pos_t)
+#
+#     ##### Kinematic scores #####
+#     kin_scores = self.kin_scores(pos_t, delta_t)
+#     trial_results = {**trial_results, **kin_scores}
+#
+#     ## sub sample ##
+#     mouse_pos_pix_sub = self.movingmean(pos_t, 5)
+#     mouse_pos_pix_sub = mouse_pos_pix_sub[::3, :]  # take every third point
+#     kin_scores_sub = self.kin_scores(mouse_pos_pix_sub, delta_t * 3, sub_sampled=True)
+#     trial_results = {**trial_results, **kin_scores_sub}
+#
+#     ##### dtw #####
+#     dtw_res = self.dtw_features(pos_t, template)
+#     trial_results = {**trial_results, **dtw_res}
+#
+#     ##### misc #####
+#     # +1 on the pathlens bc matlab indexing
+#     trial_results['dist_t'] = np.sqrt(np.sum((template[
+#                                               trial_results['w'].astype(int)[:trial_results['pathlen'] + 1, 0], :] -
+#                                               pos_t[trial_results['w'].astype(int)[:trial_results['pathlen'] + 1,
+#                                                     1]]) ** 2, axis=1))
+#
+#     # normalize distance dt by length of copied template (in samples)
+#     trial_results['dt_norm'] = trial_results['dt_l'] / (trial_results['pathlen'] + 1)
+#
+#     # get length of copied part of the template (in samples)
+#     trial_results['len'] = (trial_results['pathlen'] + 1) / len(template)
+#
+#     ### no way to calculate these ###
+#     # its the time between touching the cyan square and starting drawing (i think)
+#     trial_results['ptt'] = sample_data['ptt']
+#     trial_results['ix_block'] = sample_data['ix_block']
+#     trial_results['ix_trial'] = sample_data['ix_trial']
+#     trial_results['startTStamp'] = sample_data['startTStamp']
+#     trial_results['stim'] = sample_data['stim']
+#
+#     ### weird stuff and index changes ###
+#     # trial_results['pos_t'] = trial_results['pos_t'].astype('<u2')
+#     trial_results['pathlen'] += 1
+#     trial_results['w'] += 1
+#     # process delta t error
+#     trial_results['acceleration'] *= delta_t
+#     trial_results['acceleration_x'] *= delta_t
+#     trial_results['acceleration_y'] *= delta_t
+#     trial_results['acceleration_sub'] *= delta_t * 3
+#     trial_results['acceleration_x_sub'] *= delta_t * 3
+#     trial_results['acceleration_y_sub'] *= delta_t * 3
+#
+#     def check_with_tol(x, y, tol=0.0001):
+#         return np.abs(x - y) < tol
+#
+#     print('calculated results - beginning checks')
+#     for key, data in trial_results.items():
+#         try:
+#             if isinstance(data, np.ndarray):
+#                 check = check_with_tol(data, sample_data[key]).all()
+#
+#                 if not check:
+#                     print(f'{key} FAILED')
+#             else:
+#
+#                 check = check_with_tol(data, sample_data[key])
+#
+#                 if not check:
+#                     print(f'{key} FAILED: {data} should be {sample_data[key]}')
+#         except:
+#             print(f'encountered error with {key}')
+#
+#     return trial_results
