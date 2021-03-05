@@ -79,7 +79,7 @@ for t in [2.2,2.7,3,6.00555]:
 #     trial_results['ptt'] = sample_data['ptt']
 #     trial_results['ix_block'] = sample_data['ix_block']
 #     trial_results['ix_trial'] = sample_data['ix_trial']
-#     trial_results['startTStamp'] = sample_data['startTStamp']
+#     trial_results['start_t_stamp'] = sample_data['start_t_stamp']
 #     trial_results['stim'] = sample_data['stim']
 #
 #     ### weird stuff and index changes ###

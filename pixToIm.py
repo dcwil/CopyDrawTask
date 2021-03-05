@@ -80,7 +80,7 @@ def pixToIm(pixLett,theBoxPix,winSize,sz=50,reach=12,leeway=100,shift=True):
         
     #     try:
     #         #need to ignore jumps outside of the Box
-    #         if in_box((px,py),theBox,leeway=leeway):
+    #         if in_box((px,py),the_box,leeway=leeway):
     #             im[px,py] = 1
     #     except IndexError:
     #         print(im.shape)
@@ -90,7 +90,7 @@ def pixToIm(pixLett,theBoxPix,winSize,sz=50,reach=12,leeway=100,shift=True):
             
             
     # #now need to reduce im dimensions to those of the box
-    # min_x,max_x,min_y,max_y = in_box((0,0),theBox,leeway=leeway,return_size=True)
+    # min_x,max_x,min_y,max_y = in_box((0,0),the_box,leeway=leeway,return_size=True)
     # im = im[min_x:max_x,min_y:max_y]
     
     
@@ -146,8 +146,8 @@ if __name__ == '__main__':
     reach = 12
     
     #values are relative to 0,0 at center of screen, will need to shift
-    shift_x = winSize[0]/2#np.abs(min(theBox.T[0]))
-    shift_y = winSize[1]/2#np.abs(min(theBox.T[1]))
+    shift_x = winSize[0]/2#np.abs(min(the_box.T[0]))
+    shift_y = winSize[1]/2#np.abs(min(the_box.T[1]))
     
     pixLet[:,0] += shift_x
     pixLet[:,1] += shift_y

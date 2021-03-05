@@ -78,10 +78,6 @@ cm or m per second
 
 check matlab for units (keep same units as matlab) : seems to be in pix
 
-static image next
-
-
-
 pep8
 
 cprofile snakeviz

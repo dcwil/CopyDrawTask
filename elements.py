@@ -2,7 +2,7 @@ from psychopy.visual import ShapeStim, ImageStim, Circle,\
     TextStim, Rect
 
 classes = {
-    'theBox': ShapeStim,
+    'the_box': ShapeStim,
     'trial_number': TextStim,
     'cursor': Circle,
     'trace': ShapeStim,
@@ -13,7 +13,7 @@ classes = {
 }
 
 static_params = {
-    'theBox': {
+    'the_box': {
         'closeShape': True,
         'pos': (0, 0),
         'size': 1.5,

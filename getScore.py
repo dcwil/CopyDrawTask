@@ -40,12 +40,12 @@ if __name__ == '__main__':
     # trial_no = 0
     
     # pixLet = df.loc['pos_t'][trial_no]
-    # theBox = df.loc['theBoxPix'][trial_no]
+    # the_box = df.loc['theBoxPix'][trial_no]
     # winSize = df.loc['winSize'][trial_no]
     # target = df.loc['templatePix'][trial_no]
     
-    # gaus1,im1,blur1 = pixToIm(target,theBox,winSize)
-    # gaus2,im2,blur2 = pixToIm(pixLet,theBox,winSize) #trace
+    # gaus1,im1,blur1 = pixToIm(target,the_box,winSize)
+    # gaus2,im2,blur2 = pixToIm(pixLet,the_box,winSize) #trace
     
     
     
@@ -85,7 +85,7 @@ if __name__ == '__main__':
         
         matlab_res = sio.loadmat(p,simplify_cells = True)
         
-        theBox_mat = matlab_res['theBox']['boxPos'].T.astype(float)
+        theBox_mat = matlab_res['the_box']['boxPos'].T.astype(float)
         winSize_mat = np.array([3440,1440]) # matlab just goes fullscreen - adapt to other monitors if needed
         target_mat = matlab_res['templateLet'].astype(float)
         pixLet_mat = matlab_res['traceLet'].astype(float) # should be int  but there are nans in there that we "need"
