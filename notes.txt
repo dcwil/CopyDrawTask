@@ -49,10 +49,11 @@
 - is manyshape thickness and smoothness ok? (if its going to be used)
 - how fine do we want delta_t? should I record the exact time gap between each point?
     -> now record the t at each point where do we go from here? calculate an avg anduse that (current)
-- units?
+- units? matlab appears to be in pix
 - sample data does not match matlab results: found bug, should have fixed this, not checked yet
 - inceasing trace thickenss suffers from same problems as template in terms of interpolation
 - how close do scores need to be to matlab ones?
+- matlab implies nans when the pen is lifted off - implement that too?
 
 #### misc ####
 - need to check indexing, and decide on a convention (trial_idx starts from 1 but stimuli_idx 0)
@@ -65,7 +66,7 @@
 generate drawn images from templates, use matplotlib or plotly, DONE
 mayeb separate program sep traceautomated, recford mouse movement use both
 print out timestep
-hisogram delta t
+hisogram delta t: looks good majority below 7ms
 
 compare thickness in matlab!!!
 

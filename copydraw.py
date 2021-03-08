@@ -18,7 +18,7 @@ from base import AbstractParadigm
 from psychopy import core, event, clock
 from psychopy.tools.monitorunittools import convertToPix  # , posToPix
 from pathlib import Path
-from scipy.interpolate import splprep, splev # abandon this smoothing method?
+from scipy.interpolate import splprep, splev  # abandon this smoothing method?
 from template_image import template_to_image
 
 logger = logging.getLogger('CopyDraw')
@@ -65,10 +65,13 @@ class ManyShapeStim:
             shape.draw()
 
 
+class FinishedTrial(Exception):
+    pass
+
+
 class CopyDraw(AbstractParadigm):
 
     # should there be an n_blocks arg? probably
-    # some of these init argsshould be moved to the block init
     def __init__(self,
                  data_dir,
                  screen_size=(1920, 1200),  # 16:10 ratio
@@ -77,7 +80,8 @@ class CopyDraw(AbstractParadigm):
                  lpt_address=None,
                  serial_nr=None,
                  verbose=True,
-                 old_template_path='../CopyDraw_mat_repo/CopyDrawTask-master/templates/shapes'):
+                 old_template_path=
+                 '../CopyDraw_mat_repo/CopyDrawTask-master/templates/shapes'):
         super().__init__(screen_ix=screen_ix, lpt_address=lpt_address,
                          serial_nr=serial_nr)
 
@@ -125,14 +129,17 @@ class CopyDraw(AbstractParadigm):
         self.trial_results = None
         self.frame_elements = None
         self.block_name = None
+        self._frame_idx = None
         self.verbose = verbose  # For debugging, toggles print messages
         # Change the prints to leg messages when you figure out how to log stuff
-        if self.verbose: print('initialised')
+        if self.verbose:
+            print('initialised')
 
     def init_session(self, session_name=None):
 
         if session_name is None:
-            self.session_name = time.asctime(time.localtime(time.time())).replace(':', '-')
+            self.session_name =\
+                time.asctime(time.localtime(time.time())).replace(':', '-')
         else:
             self.session_name = session_name
         self.session_dir = self.results_dir / self.session_name
@@ -149,7 +156,7 @@ class CopyDraw(AbstractParadigm):
                    finish_when_raised=True,
                    n_letters=3,
                    stim_size=35,
-                   interp='smooth',  # {'s':0.001,'n_interp':300}, dict or None or 'smooth'
+                   interp='smooth',  # {'s':0.001,'n_interp':300},None,'smooth'
                    ):
 
         super().init_block(self.screen_size)
@@ -224,7 +231,8 @@ class CopyDraw(AbstractParadigm):
         self.instructions_path = Path(path)
         assert self.instructions_path.exists(), f'Instructions file not found \
             {self.instructions_path}'
-        if self.verbose: print('instructions loaded')
+        if self.verbose:
+            print('instructions loaded')
 
     def get_old_stimuli(self, stimuli_idx, temp_or_box='theBox'):
         """ get old stimuli matching the new naming convention """
@@ -255,16 +263,20 @@ class CopyDraw(AbstractParadigm):
     def load_stimuli(self, path, short=True, size=35):
         self.stimuli_fname = f'Size_{"short_" if short else ""}{size}.mat'
         stimuli_path = Path(path, self.stimuli_fname)
-        if self.verbose: print(f'loading stimuli: {stimuli_path}')
+        if self.verbose:
+            print(f'loading stimuli: {stimuli_path}')
         assert stimuli_path.exists(), f"Stimuli data not found: {stimuli_path}"
 
         try:
             self.stimuli_file = scipy.io.loadmat(stimuli_path)
-            if self.verbose: print('loaded mat file')
+            if self.verbose:
+                print('loaded mat file')
             self.templates = self.stimuli_file['new_shapes'][0]
-        except Exception as e:  # rewrite
-            if self.verbose: print(e)
-        if self.verbose: print('stimuli loaded')
+        except Exception as err:  # rewrite
+            if self.verbose:
+                print(err)
+        if self.verbose:
+            print('stimuli loaded')
 
         self.n_templates = self.templates.shape[0]
 
@@ -273,8 +285,9 @@ class CopyDraw(AbstractParadigm):
         # requires stimuli to be loaded & n_trials to have been defined
         if self.n_templates % self.n_trials != 0:
             # change to a proper warning message?
-            if self.verbose: print(f'WARNING: {self.n_trials} trials means that '
-                  f'there will be an uneven number of templates')
+            if self.verbose:
+                print(f'WARNING: {self.n_trials} trials means that '
+                      f'there will be an uneven number of templates')
 
         self.order = [(i % self.n_templates) for i in range(self.n_trials)]
 
@@ -302,11 +315,13 @@ class CopyDraw(AbstractParadigm):
                 # reorder
                 new_box_array = np.zeros([4, 2])
                 new_box_array[0:2] = self.the_box[0:2]
-                new_box_array[2], new_box_array[3] = self.the_box[3],\
-                                                     self.the_box[2]
+                new_box_array[2] = self.the_box[3]
+                new_box_array[3] = self.the_box[2]
+
                 self.the_box = new_box_array
 
-                if self.verbose: print('scaled')
+                if self.verbose:
+                    print('scaled')
                 if self.flip:
                     self.current_stimulus = np.matmul(self.current_stimulus,
                                                       np.array([[1, 0], [0, -1]]))
@@ -331,18 +346,21 @@ class CopyDraw(AbstractParadigm):
             return self.current_stimulus
 
         except AttributeError:
-            if self.verbose: print('load_stimuli must be called first')
+            if self.verbose:
+                print('load_stimuli must be called first')
             logger.error('Failed with AttributeError, probably due to \
                          load_stimuli not being called')
 
         except IndexError:
-            if self.verbose: print(f'only {len(self.templates)} templates')
+            if self.verbose:
+                print(f'only {len(self.templates)} templates')
             logger.error('Failed with IndexError, probably related to number \
                          of templates')
 
     def exec_block(self):
         # call exec trial 12? times
-        if self.verbose: print(f'executing block {self.block_idx}')
+        if self.verbose:
+            print(f'executing block {self.block_idx}')
 
         self.block_results = {}
 
@@ -376,6 +394,8 @@ class CopyDraw(AbstractParadigm):
 
     # draw order is based on .draw() call order, consider using an ordered dict?
     def draw_and_flip(self, exclude=[]):
+        """ Draws every element in the frame elements dict, excluding those
+         passed in via exclude. """
         for element_name, element in self.frame_elements.items():
             if element_name in exclude:
                 continue
@@ -400,7 +420,8 @@ class CopyDraw(AbstractParadigm):
         # uncomment below to draw old template to check how the image
         # matches up with it
 
-        # # seems to top out after like 10 or 20: https://github.com/psychopy/psychopy/issues/818
+        # # seems to top out after like 10 or 20:
+        # https://github.com/psychopy/psychopy/issues/818
         # from psychopy.visual import ShapeStim
         # self.frame_elements['old_template'] = visual.ShapeStim(win=self.win,
         #                                             vertices=self.get_stimuli(stimuli_idx,scale=scale),
@@ -439,17 +460,17 @@ class CopyDraw(AbstractParadigm):
             )
         )
 
-        # trace vertices
-        # could also take first point from the cursor
-        self.trace_vertices = [convertToPix(self.cursor_start_point * 1.5,
-                                            (0, 0),
-                                            'norm',
-                                            self.win)]
+        max_trace_len = 10000  # Should be more points than would ever be drawn
+        self.trace_vertices = np.zeros([max_trace_len, 2])
+        self.trace_vertices[0] = convertToPix(self.cursor_start_point * 1.5,
+                                              (0, 0),
+                                              'norm',
+                                              self.win)
 
         self.frame_elements['trace'] = create_element(
             'trace',
             win=self.win,
-            vertices=self.trace_vertices,
+            vertices=self.trace_vertices[0],
         )
 
         self.frame_elements['instructions'] = create_element(
@@ -475,9 +496,9 @@ class CopyDraw(AbstractParadigm):
     # should stimuli_idx just be called trial_idx?
     # currently they are initialised differently (0 and 1)
     def exec_trial(self, stimuli_idx, scale=True):
-        # display a single copydraw task
-
-        if self.verbose: print('executing trial')
+        """ Top level method that executes a single trial """
+        if self.verbose:
+            print('executing trial')
 
         # define duration as how long it runs for max, trial_time as actual
         # runtime (finish when raised etc)
@@ -499,10 +520,42 @@ class CopyDraw(AbstractParadigm):
         mouse = event.Mouse()
 
         # main bit
-        main_loop = True
-        started_drawing = False
-        while main_loop:
+        self._frame_idx = 0  # refers only to frames during drawing trace
+        ptt, start_t_stamp, cursor_t = self._run_trial_main_loop(clock, mouse,
+                                                                 time_bar_x)
 
+        cursor_t = cursor_t[:self._frame_idx+1]  # truncate
+        if self.verbose:
+            print(f'drew {self._frame_idx} frames')
+            print(f'cursor_t is: {cursor_t.shape} and'
+                  f' has mean diff: {np.mean(np.diff(cursor_t))} and '
+                  f'which has std: {np.std(np.diff(cursor_t))}')
+
+        # trial time is how long they were drawing for,
+        # ie time elapsed during drawing
+        trial_time = self.trial_duration - cursor_t[-1]
+        if self.verbose:
+            print(f"recorded {self._frame_idx} points at a rate of"
+                  f" {self._frame_idx / trial_time} points per sec")
+        # should there be any unit conversions done?
+
+        # separate the main loop and data stuff
+        trace_let = self.frame_elements['trace'].vertices.copy()
+        trace_let_pix = self.frame_elements['trace'].verticesPix.copy()
+
+        self._create_trial_res(trace_let, trial_time, ptt, start_t_stamp,
+                               trace_let_pix, scale, cursor_t)
+
+    def exit(self):
+        self.finish_block()
+        # core.quit()
+
+    def _run_trial_main_loop(self, clock, mouse, time_bar_x):
+        """ To run the main drawing loop """
+
+        started_drawing = False
+        cursor_t = np.zeros([10000])  # for recording times with cursor pos
+        while True:
             # only show instructions if start_point not clicked
             if self.frame_elements['start_point'].fillColor != 'Cyan':
                 self.draw_and_flip(exclude=['trace'])
@@ -532,61 +585,22 @@ class CopyDraw(AbstractParadigm):
                 # shrink time bar, draw trace, once drawing has started
                 if started_drawing:
 
-                    # for recording times associated with cursor pos
-                    cursor_t = [start_t_stamp]
-
-                    c = 0
-                    # decreasing time_bar
-                    while trial_timer.getTime() > 0:
-
-                        # get remaining time
-                        t_remain = trial_timer.getTime()
-                        ratio = t_remain / self.trial_duration
-
-                        # adjust time_bar size and position
-                        if c % 2 == 0:  # every other frame
-                            self._adjust_time_bar(ratio, time_bar_x)
-
-                        # while mouse is pressed in, update cursor position
-                        if mouse.getPressed()[0]:
-                            self._move_cursor(mouse, trial_timer.getTime(),
-                                              cursor_t, c)
-
-                        # ISSUE currently cant do non continuous lines
-                        # only draw every xth frame, increases recording rate
-                        # erm this doesnt seem to work
-                        # opposite effect seems to happen?!
-                        if c % 2 == 0:
-                            self.draw_and_flip(exclude=['instructions'])
-                        c += 1
-
-                        if (not mouse.getPressed()[0] and
-                                self.finish_when_raised and started_drawing):
-                            if self.verbose: print('mouse raised - ending')
-                            main_loop = False
-                            break
+                    self._exec_drawing(trial_timer, mouse, time_bar_x, cursor_t)
 
                     # time_bar elapsed
-                    if self.verbose: print('breaking out of main')
+                    if self.verbose:
+                        print('breaking out of main')
 
-                    main_loop = False
+                    break
 
-        # trial time is how long they were drawing for,
-        # ie time elapsed during drawing
-        trial_time = self.trial_duration - cursor_t[-1]
-        if self.verbose: print(
-            f"recorded {len(self.trace_vertices)} points at a rate of"
-            f" {len(self.trace_vertices) / trial_time} points per sec")
-        # should there be any unit conversions done?
-        # maybe put all this stuff below in a func of its own
-        # separate the main loop and data stuff
-        trace_let = self.frame_elements['trace'].vertices.copy()
+        return ptt, start_t_stamp, cursor_t
 
-        # postprocessing funcs now in separate file
-        # funcs for computing dtw etc on recorded data not yet written
-        # scoring
-        self.trial_results = {'trace_let': trace_let,
-                              'trial_time': trial_time,
+    def _create_trial_res(self, trace_let, trial_time, ptt, start_t_stamp,
+                          trace_let_pix, scale, cursor_t):
+        """ Creates the results dict that contains basic/essential trial info
+        to be saved. """
+        # original data + metadata
+        self.trial_results = {'trace_let': trace_let, 'trial_time': trial_time,
                               'ix_block': self.block_idx,
                               'ix_trial': self.trial_idx, 'ptt': ptt,
                               'start_t_stamp': start_t_stamp}
@@ -597,23 +611,24 @@ class CopyDraw(AbstractParadigm):
 
         self.trial_results['trial_duration'] = self.trial_duration
         self.trial_results['flip'] = self.flip
-        self.trial_results['the_box'] = self.frame_elements['the_box'].vertices.copy()
+        self.trial_results['the_box'] = self.frame_elements[
+            'the_box'].vertices.copy()
 
-        self.trial_results['theBoxPix'] = self.frame_elements['the_box'].verticesPix
+        self.trial_results['theBoxPix'] = self.frame_elements[
+            'the_box'].verticesPix
 
-        trace_let_pix = self.frame_elements['trace'].verticesPix.copy()
+        self.trial_results['cursor_t'] = cursor_t
+
         if (trace_let != trace_let_pix).any():
             self.trial_results['pos_t_pix'] = trace_let_pix
 
         # in matlab i think this is theRect
         self.trial_results['winSize'] = self.win.size
 
-        self.trial_results['templatePix'] = self.frame_elements['template'].verticesPix
+        self.trial_results['templatePix'] = self.frame_elements[
+            'template'].verticesPix
         # do i need to add theWord? maybe - is the index enough?
 
-    def exit(self):
-        self.finish_block()
-        # core.quit()
 
     def _adjust_time_bar(self, ratio, time_bar_x):
         """ Method for adjusting the size of time bar. Wrote
@@ -626,27 +641,61 @@ class CopyDraw(AbstractParadigm):
         self.frame_elements['time_bar'].setSize(new_size)
         self.frame_elements['time_bar'].setPos(new_pos)
 
-    def _move_cursor(self, mouse, t_remain, cursor_t, c):
+    def _move_cursor(self, mouse, t_remain, cursor_t):
         """ Method for adjusting the position of the cursor and drawing the
         trace. Wrote mainly to aid profiling."""
 
-        # get new position from mouse
-        new_pos = convertToPix(mouse.getPos(), (0, 0), units=mouse.units,
-                               win=self.win)
+        # Get new position from mouse
+        if mouse.getPressed()[0]:
+            new_pos = convertToPix(mouse.getPos(), (0, 0), units=mouse.units,
+                                   win=self.win)
+        else:
+            new_pos = self.trace_vertices[self._frame_idx]
 
-        # record time at which that happened
-        # could maybe use t_remain here
-        cursor_t.append(t_remain)
+        # Record time at which that happened
+        # cursor_t.append(t_remain)
+        cursor_t[self._frame_idx] = t_remain
 
-        # move cursor to that position and save
-        # for drawing trace
-        if c % 2 == 0:  # Only draw cursor pos change every other frame
-            self.frame_elements['cursor'].pos = new_pos
+        # Move cursor to that position and save
+        self.frame_elements['cursor'].pos = new_pos
 
+        # For drawing trace
+        self._draw_trace(new_pos)
+
+    def _draw_trace(self, new_pos):
+        """ Method that controls trace drawing (doesn't actually draw it just
+        controls the vertices). - for profiling. """
+        # ISSUE currently cant do non continuous lines
         # Draw trace, or rather, add new_pos to the trace
-        self.trace_vertices.append(new_pos)
-        self.frame_elements[
-            'trace'].vertices = self.trace_vertices
+        self.trace_vertices[self._frame_idx+1] = new_pos
+        self.frame_elements['trace'].vertices = self.trace_vertices[:self._frame_idx+1]
+
+    def _exec_drawing(self, trial_timer, mouse, time_bar_x, cursor_t):
+        """ All the drawing stuff goes in this """
+        while trial_timer.getTime() > 0:
+
+            # get remaining time
+            t_remain = trial_timer.getTime()
+            ratio = t_remain / self.trial_duration
+
+            # adjust time_bar size and position
+            if self._frame_idx % 2 == 0:  # every other frame
+                self._adjust_time_bar(ratio, time_bar_x)
+
+            # update cursor position
+            self._move_cursor(mouse, trial_timer.getTime(), cursor_t)
+
+            # only draw every xth frame
+            if self._frame_idx % 2 == 0:
+                self.draw_and_flip(exclude=['instructions'])
+
+            if (not mouse.getPressed()[
+                0] and self.finish_when_raised):
+                if self.verbose:
+                    print('mouse raised - ending')
+                # main_loop = False
+                break
+            self._frame_idx += 1
 
 
 if __name__ == "__main__":
