@@ -42,7 +42,7 @@
     > dynamic saving? write traces to file during experiment, calc data afterwards? : started, need to write calc funcs
 - in matlab, individual trials are saved as well as the block but the values are the same
 - need to copy perfomance analysis plot each blocks performance
-
+- just "stim" missing from processed scores
 
 
 #### Questions ####
@@ -54,6 +54,7 @@
 - inceasing trace thickenss suffers from same problems as template in terms of interpolation
 - how close do scores need to be to matlab ones?
 - matlab implies nans when the pen is lifted off - implement that too?
+
 
 #### misc ####
 - need to check indexing, and decide on a convention (trial_idx starts from 1 but stimuli_idx 0)

@@ -11,6 +11,7 @@ import time
 import logging
 import random
 import utils
+import processing
 import json
 
 from elements import create_element
@@ -20,6 +21,7 @@ from psychopy.tools.monitorunittools import convertToPix  # , posToPix
 from pathlib import Path
 from scipy.interpolate import splprep, splev  # abandon this smoothing method?
 from template_image import template_to_image
+from getScore import get_score_from_trace
 
 logger = logging.getLogger('CopyDraw')
 
@@ -64,9 +66,6 @@ class ManyShapeStim:
         for shape in self.shapes:
             shape.draw()
 
-
-class FinishedTrial(Exception):
-    pass
 
 
 class CopyDraw(AbstractParadigm):
@@ -492,7 +491,6 @@ class CopyDraw(AbstractParadigm):
             win=self.win
         )
 
-    # this is too long
     # should stimuli_idx just be called trial_idx?
     # currently they are initialised differently (0 and 1)
     def exec_trial(self, stimuli_idx, scale=True):
@@ -547,7 +545,7 @@ class CopyDraw(AbstractParadigm):
                                trace_let_pix, scale, cursor_t)
 
     def exit(self):
-        self.finish_block()
+        self.finish_block()  # base class method
         # core.quit()
 
     def _run_trial_main_loop(self, clock, mouse, time_bar_x):
@@ -595,6 +593,63 @@ class CopyDraw(AbstractParadigm):
 
         return ptt, start_t_stamp, cursor_t
 
+    # Should these processing functions be in a separate file?
+    # or remain as methods?
+    def process_session(self, session_name=None):
+        session_name_ = session_name or self.session_name  # is this ok?
+        session_dir = self.results_dir / session_name_
+        # list blocks
+        all_blocks = [f for f in session_dir.rglob('*/**')
+                      if 'info_runs' not in f.name]
+        # loop over blocks
+        for block_path in all_blocks:
+
+            # scoring each block and saving
+            self.process_block(block_path)
+
+    def process_block(self, block_path):
+
+        # this assumes trial scores are saved as pickle
+        all_trials = [f for f in block_path.rglob('tscore*.pkl')]
+
+        for trial_path in all_trials:
+            self.process_trial(trial_path)
+
+    def process_trial(self, trial_path):  # this is where the processing is done
+        df = pd.read_pickle(trial_path)
+        res = {}
+        res['ptt'] = df.ptt
+        res['startTStamp'] = df.start_t_stamp
+        res['ix_trial'] = df.ix_trial
+        res['ix_block'] = df.ix_block
+        # both trace and template should have the same starting point
+        # use this to scale things
+        sf = df.trace_let[0] / df.template[0]
+        scaled_template = df.template * sf
+        res['scaled_template'] = scaled_template
+        res['sf'] = sf
+        scores = processing.computeScoreSingleTrial(df.trace_let,
+                                                    scaled_template,
+                                                    df.trial_time)
+        res = {**res, **scores}
+
+        score = get_score_from_trace(df.trace_let, scaled_template,
+                                     df.theBoxPix, df.winSize)
+
+        res['score'] = score
+
+        self.save_processed_trial(res, trial_path)
+
+    def save_processed_trial(self, res, trial_path):
+        block_dir = trial_path.parents[0]
+        fname = f"processed_scores_trial_{res['ix_trial']}" \
+                f"_block{res['ix_block']}.pkl"
+
+        df = pd.Series(res)
+        if self.verbose:
+            print(f"Saving trial {res['ix_trial']} block {res['ix_block']}")
+        df.to_pickle(block_dir / fname)
+
     def _create_trial_res(self, trace_let, trial_time, ptt, start_t_stamp,
                           trace_let_pix, scale, cursor_t):
         """ Creates the results dict that contains basic/essential trial info
@@ -625,8 +680,17 @@ class CopyDraw(AbstractParadigm):
         # in matlab i think this is theRect
         self.trial_results['winSize'] = self.win.size
 
-        self.trial_results['templatePix'] = self.frame_elements[
-            'template'].verticesPix
+        self.trial_results['template'] = self.current_stimulus
+        stim_size = self.frame_elements['template'].size
+        stim_pos = self.frame_elements['template'].pos
+        self.trial_results['template_pix'] = convertToPix(self.current_stimulus,
+                                                          units='norm',
+                                                          pos=stim_pos,
+                                                          win=self.win)
+        self.trial_results['template_size'] = stim_size
+        self.trial_results['template_pos'] = stim_pos
+        # self.trial_results['templatePix'] = self.frame_elements[
+        #     'template'].verticesPix
         # do i need to add theWord? maybe - is the index enough?
 
 

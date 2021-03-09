@@ -9,7 +9,7 @@ import numpy as np
 import scipy.io
 
 from pathlib import Path
-
+from numpy.linalg import norm
 
 #Do I still need this?
 def load_pos_and_template(filepath,templates_dir):
@@ -120,19 +120,6 @@ def smooth(shape,return_df=False):
     
     
     return df if return_df else df[['dxm','dym']].to_numpy()
-    
-#dont need this anymore
-# def load_pixel_data(path_to_mouse_pos_pix):
-#     """ 
-#     helper func for loading data
-#     """
-    
-#     path_to_mouse_pos_pix = Path(path_to_mouse_pos_pix)
-#     path_to_template_pix = Path(path_to_mouse_pos_pix.parent,'template_pix.npy')
-#     mouse_pos_pix = np.load(path_to_mouse_pos_pix)
-#     template_pix = np.load(path_to_template_pix)
-#     return mouse_pos_pix, template_pix
-
 
 def simple_plot(arr, kind='plot'):
     """ given a 2d array plots it """
@@ -143,8 +130,7 @@ def simple_plot(arr, kind='plot'):
     #figure()
     types = {'plot':plot,'scatter':scatter}
     types[kind](arr[:,0],arr[:,1])
-    
-    
+
 
 def movingmean(arr,w_size):
     # trying to mimic some of the functionality from:
