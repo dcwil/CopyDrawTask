@@ -4,6 +4,8 @@ Created on Mon Nov 30 10:59:38 2020
 
 @author: Daniel
 """
+import pdb
+
 import numpy as np
 import pandas as pd
 import scipy.io
@@ -27,8 +29,6 @@ logger = logging.getLogger('CopyDraw')
 
 
 # logger.setLevel(logging.DEBUG)
-
-
 # boxColour = [160,160,180]
 # boxHeight = 200
 # boxLineWidth = 6
@@ -73,12 +73,15 @@ class CopyDraw(AbstractParadigm):
     # should there be an n_blocks arg? probably
     def __init__(self,
                  data_dir,
-                 screen_size=(1920, 1200),  # 16:10 ratio
+                 screen_size=(920, 1200),  # 16:10 ratio
                  screen_ix=0,
                  flip=True,
                  lpt_address=None,
                  serial_nr=None,
                  verbose=True,
+
+                 # MD: paths like this are configs which we should collect at a single place / file
+                 # --> Plus, we really should get rid of dependencies to old data!!
                  old_template_path=
                  '../CopyDraw_mat_repo/CopyDrawTask-master/templates/shapes'):
         super().__init__(screen_ix=screen_ix, lpt_address=lpt_address,
@@ -129,6 +132,11 @@ class CopyDraw(AbstractParadigm):
         self.frame_elements = None
         self.block_name = None
         self._frame_idx = None
+
+        self._lifted = True             # track if mouse is currently lifted
+        self.traces = []                # list to record multiple trace object names --> drawing interupted lines
+        self._start_frame_idx = 0       # frame index of the last started trace
+
         self.verbose = verbose  # For debugging, toggles print messages
         # Change the prints to leg messages when you figure out how to log stuff
         if self.verbose:
@@ -236,6 +244,9 @@ class CopyDraw(AbstractParadigm):
     def get_old_stimuli(self, stimuli_idx, temp_or_box='theBox'):
         """ get old stimuli matching the new naming convention """
 
+        # MD: Actually, we should not use this old data, especially since
+        # this directory is not self-sufficient with this
+
         old_stim_path = Path(self.data_dir, self.old_template_path)
         assert old_stim_path.exists(), f"old Stimuli data not " \
                                        f"found: {old_stim_path}"
@@ -255,8 +266,27 @@ class CopyDraw(AbstractParadigm):
         return self.old_stimuli[temp_or_box]
 
     def get_box(self, idx):
-        box = self.get_old_stimuli(idx)
-        self.the_box = box['boxPos'].T  # box[0,0][0].T.astype(float)
+
+        # MD: This is an inefficient pattern, as for each call to get box,
+        # we will perform a glob / parse directories. Better get all files dirs
+        # mapped to indices during initialization and later load only the path
+        # --> effectively only one "glob" vs n
+        # box = self.get_old_stimuli(idx)
+        # self.the_box = box['boxPos'].T  # box[0,0][0].T.astype(float)
+
+        # MD -> as this seems rather constant for a given size and n_letters ==> just hardcode for now
+        tb = np.array([[285, 392],
+                       [1635, 392],
+                       [285, 808],
+                       [1635, 808],
+                       [288, 392],
+                       [288, 808],
+                       [1632, 392],
+                       [1632, 808],
+                       ])
+
+        self.the_box = tb
+
         return self.the_box
 
     def load_stimuli(self, path, short=True, size=35):
@@ -298,6 +328,7 @@ class CopyDraw(AbstractParadigm):
                 random.shuffle(self.order)
 
     def get_stimuli(self, stimuli_idx, scale=True):
+
         try:
             self.current_stimulus = self.templates[stimuli_idx].astype(float)
             self.get_box(stimuli_idx)
@@ -392,6 +423,7 @@ class CopyDraw(AbstractParadigm):
             json.dump(self.trials_vec, h)
 
     # draw order is based on .draw() call order, consider using an ordered dict?
+    # MD: Ordered dict would be a good idea
     def draw_and_flip(self, exclude=[]):
         """ Draws every element in the frame elements dict, excluding those
          passed in via exclude. """
@@ -466,11 +498,12 @@ class CopyDraw(AbstractParadigm):
                                               'norm',
                                               self.win)
 
-        self.frame_elements['trace'] = create_element(
-            'trace',
+        self.frame_elements['trace1'] = create_element(
+           'trace',                           # we will dynamically create more -> draw interupted lines
             win=self.win,
-            vertices=self.trace_vertices[0],
+            vertices=self.trace_vertices[0:0],          # initialize empty
         )
+        self.traces.append('trace1')
 
         self.frame_elements['instructions'] = create_element(
             'instructions',
@@ -509,7 +542,7 @@ class CopyDraw(AbstractParadigm):
         # self.trace.colorSpace = 'rgb255'
 
         # draw first frame
-        self.draw_and_flip(exclude=['time_bar', 'trace'])
+        self.draw_and_flip(exclude=['time_bar', 'trace1'])
 
         # time_bar
         time_bar_x = self.frame_elements['time_bar'].size[0]
@@ -537,9 +570,17 @@ class CopyDraw(AbstractParadigm):
                   f" {self._frame_idx / trial_time} points per sec")
         # should there be any unit conversions done?
 
-        # separate the main loop and data stuff
-        trace_let = self.frame_elements['trace'].vertices.copy()
-        trace_let_pix = self.frame_elements['trace'].verticesPix.copy()
+        # # separate the main loop and data stuff
+        # trace_let = self.frame_elements['trace'].vertices.copy()
+        # trace_let_pix = self.frame_elements['trace'].verticesPix.copy()
+        #
+        # For interupted traces, we now have to concatenate
+        # General TODO: --> how to deal with the jumps in terms of dtw...
+        trace_let = np.concatenate([self.frame_elements[tr_n].vertices.copy()
+                                    for tr_n in self.traces])
+        trace_let_pix = np.concatenate([self.frame_elements[tr_n].verticesPix.copy()
+                                        for tr_n in self.traces])
+
 
         self._create_trial_res(trace_let, trial_time, ptt, start_t_stamp,
                                trace_let_pix, scale, cursor_t)
@@ -553,6 +594,15 @@ class CopyDraw(AbstractParadigm):
 
         started_drawing = False
         cursor_t = np.zeros([10000])  # for recording times with cursor pos
+
+        #MD: Probably a better pattern -> two separate while loops,
+        #   one for activating the cyan square and moving to the beginning
+        #   then another one drawing and incrementing the bar
+        #
+        # As it is currently done, we have to evaluate all the ifs during each
+        # while cycle
+        # ---> actually this is what is happening...
+
         while True:
             # only show instructions if start_point not clicked
             if self.frame_elements['start_point'].fillColor != 'Cyan':
@@ -566,11 +616,15 @@ class CopyDraw(AbstractParadigm):
                 tic = clock.getTime()
                 self.draw_and_flip(exclude=['trace', 'instructions'])
 
-            if self.frame_elements['start_point'].fillColor == 'Cyan':
+            # MD: The condition down below did not work for me as fillColor returns
+            # an array for me with [-1, 1, 1]
+            # if self.frame_elements['start_point'].fillColor == 'Cyan':
+            if all(self.frame_elements['start_point'].fillColor == [-1, 1, 1]):
 
                 # drawing has begun
                 if mouse.isPressedIn(self.frame_elements['cursor']):
                     started_drawing = True
+                    self._lifted = False
 
                     trial_timer = clock.CountdownTimer(self.trial_duration)
 
@@ -595,6 +649,8 @@ class CopyDraw(AbstractParadigm):
 
     # Should these processing functions be in a separate file?
     # or remain as methods?
+    #
+    # MD: -> spare file please
     def process_session(self, session_name=None):
         session_name_ = session_name or self.session_name  # is this ok?
         session_dir = self.results_dir / session_name_
@@ -709,11 +765,17 @@ class CopyDraw(AbstractParadigm):
         """ Method for adjusting the position of the cursor and drawing the
         trace. Wrote mainly to aid profiling."""
 
+        new_trace = False
         # Get new position from mouse
         if mouse.getPressed()[0]:
+            if self._lifted:
+                new_trace = True
+                self._start_frame_idx = self._frame_idx + 1
+            self._lifted = False
             new_pos = convertToPix(mouse.getPos(), (0, 0), units=mouse.units,
                                    win=self.win)
         else:
+            self._lifted = True
             new_pos = self.trace_vertices[self._frame_idx]
 
         # Record time at which that happened
@@ -724,15 +786,29 @@ class CopyDraw(AbstractParadigm):
         self.frame_elements['cursor'].pos = new_pos
 
         # For drawing trace
-        self._draw_trace(new_pos)
 
-    def _draw_trace(self, new_pos):
+        self._draw_trace(new_pos, new_trace=new_trace)
+
+    def _draw_trace(self, new_pos, new_trace=False):
         """ Method that controls trace drawing (doesn't actually draw it just
         controls the vertices). - for profiling. """
         # ISSUE currently cant do non continuous lines
         # Draw trace, or rather, add new_pos to the trace
         self.trace_vertices[self._frame_idx+1] = new_pos
-        self.frame_elements['trace'].vertices = self.trace_vertices[:self._frame_idx+1]
+
+        if new_trace:
+            tr_i = int(self.traces[-1].replace('trace', '')) + 1
+            tr_i_n = 'trace' + str(tr_i)
+            self.frame_elements[tr_i_n] = create_element(
+                'trace',
+                win=self.win,
+                vertices=self.trace_vertices[-1],       # init does not matter, will be overwritten immediately after
+            )
+            self.traces.append(tr_i_n)
+
+        # set the trace
+        self.frame_elements[self.traces[-1]].vertices =\
+            self.trace_vertices[self._start_frame_idx:self._frame_idx+1]
 
     def _exec_drawing(self, trial_timer, mouse, time_bar_x, cursor_t):
         """ All the drawing stuff goes in this """
@@ -768,12 +844,11 @@ if __name__ == "__main__":
                         )
 
         test.init_session('TEST_SESSION')
-
         test.init_block(block_name='TEST_BLOCK',
                         n_trials=2,
                         letter_time=2.7,
-                        finish_when_raised=True
-                        )
+                        finish_when_raised=False
+                       )
         test.exec_block()
         test.exit()
 
