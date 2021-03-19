@@ -16,7 +16,7 @@ def dtw_matlab(s,t,*args,w=float('inf')):#s is trace, t is template
     if s.dtype != 'float64' or t.dtype != 'float64':
         print('Check dtype!')
     
-    #this is in the matlab code but I don't really get it
+    # this is in the matlab code but I don't really get it
     if len(args) == 0:
         w = float('inf')
         
@@ -27,43 +27,41 @@ def dtw_matlab(s,t,*args,w=float('inf')):#s is trace, t is template
         raise ValueError('Error in dtw(): the dimensions of the two input signals do not match.')
         
     # adapt window size
-    w = max([w,np.abs(ns-nt)])
+    w = max([w, np.abs(ns-nt)])
     
-    #cache matrix
-    D = np.zeros([ns+1,nt+1]) + float('inf') #array of infs
+    # cache matrix
+    D = np.zeros([ns+1, nt+1]) + float('inf')  # array of infs
         
-    C = np.zeros([ns+1,nt+1])
+    C = np.zeros([ns+1, nt+1])
     
     if nt > ns:
         D = D.T
         C = C.T
+
+    D[0, 0] = 0
     
-    
-    D[0,0] = 0
-    
-    #begin dynamic processing (i must be higher than j)
+    # begin dynamic processing (i must be higher than j)
     for i in range(D.shape[0]-1):
-        #print(f'range: [{max([i-w,1])},{min([i+w,D.shape[1]-1])}]')
-        for j in range(max([i-w,0]),min([i+w,D.shape[1]-1])):
-            
+        # print(f'range: [{max([i-w,1])},{min([i+w,D.shape[1]-1])}]')
+        for j in range(max([i-w, 0]), min([i+w, D.shape[1]-1])):
 
-            oost = norm(s[i,:] - t[j,:]) if ns >= nt else norm(s[j,:] - t[i,:])
+            oost = norm(s[i, :] - t[j, :]) \
+                if ns >= nt else norm(s[j, :] - t[i, :])
         
-            C[i+1,j+1] = oost
+            C[i+1, j+1] = oost
         
-            D[i+1,j+1] = oost + min([ D[i,j], D[i+1,j], D[i,j+1] ])
+            D[i+1, j+1] = oost + min([D[i, j], D[i+1, j], D[i, j+1]])
 
 
-    #print(i,j,D.shape,s.shape,t.shape)
-    idx_min = np.argmin(C[-1,1:]) if ns >= nt else np.argmin(C[1:,-1])
+    # print(i,j,D.shape,s.shape,t.shape)
+    idx_min = np.argmin(C[-1,1:]) if ns >= nt else np.argmin(C[1:, -1])
     
-    d = D[-1,-1]
+    d = D[-1, -1]
     
-    d_l = D[-1,idx_min] if ns >= nt else D[idx_min,-1]
-    
-    
-    #compute optimal path
-    D = D[1:,1:]
+    d_l = D[-1, idx_min] if ns >= nt else D[idx_min, -1]
+
+    # compute optimal path
+    D = D[1:, 1:]
     
     optim_path = np.zeros([max([s.shape[0],t.shape[0]]),2])
     
@@ -79,16 +77,17 @@ def dtw_matlab(s,t,*args,w=float('inf')):#s is trace, t is template
     
 
 ### verify ###
-# checked in matlab, my func produces the same results in python as the matlab one does NOPE
+# checked in matlab, my func produces the same results in python as the matlab one does
 # still cant recreate sample data
 if __name__ == '__main__':
     
     import scipy.io as sio
-    pro_scores = sio.loadmat('sample_data/processed_scores_trial_01_block01.mat',simplify_cells=True)
+    pro_scores = sio.loadmat(
+        '../sample_data/processed_scores_trial_01_block01.mat', simplify_cells=True)
     #i think those are block scores
     
-    scores = sio.loadmat('sample_data/scores_copyDraw_block01.mat',simplify_cells=True)
-    templates = sio.loadmat('templates/Size_20.mat',simplify_cells=True)
+    scores = sio.loadmat('../sample_data/scores_copyDraw_block01.mat', simplify_cells=True)
+    templates = sio.loadmat('../templates/Size_20.mat', simplify_cells=True)
     #old_templates = sio.loadmat('../CopyDraw_mat_repo/CopyDrawTask-master/templates/shapes/Size_2/132.mat',simplify_cells=True)
     
     

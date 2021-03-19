@@ -6,6 +6,8 @@
 results/
 sample_data/
 template_images/
+old/
+test/results/
 
 #profiling
 *.prof

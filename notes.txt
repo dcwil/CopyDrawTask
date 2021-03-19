@@ -43,6 +43,7 @@
 - in matlab, individual trials are saved as well as the block but the values are the same
 - need to copy perfomance analysis plot each blocks performance
 - just "stim" missing from processed scores
+- handle nans!
 
 
 #### Questions ####
@@ -53,7 +54,8 @@
 - sample data does not match matlab results: found bug, should have fixed this, not checked yet
 - inceasing trace thickenss suffers from same problems as template in terms of interpolation
 - how close do scores need to be to matlab ones?
-- matlab implies nans when the pen is lifted off - implement that too?
+- matlab implies nans when the pen is lifted off - implement that too? Where in the pipeline should it be handled
+- how is stim entered? detected, or manually and for a block or trial?
 
 
 #### misc ####
@@ -83,3 +85,7 @@ check matlab for units (keep same units as matlab) : seems to be in pix
 pep8
 
 cprofile snakeviz
+
+points of least distance dist t: 3rd party implementation, dtw-python? (run through a full dataset) investigate which step pattern
+
+folder!

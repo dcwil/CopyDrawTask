@@ -5,7 +5,7 @@ Created on Tue Feb 23 15:00:00 2021
 @author: Daniel
 """
 import numpy as np
-from pixToIm import pixToIm
+from matlab_ports.pixToIm import pixToIm
 
 
 ### not yet written in the statistics on individual trials thats in the mat file

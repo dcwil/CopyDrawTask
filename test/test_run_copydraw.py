@@ -50,7 +50,7 @@ def select_display():
 
 
 def run_copy_draw():
-    data_dir = '.'
+    data_dir = '../'
     test_cpd = CopyDraw(data_dir,
                         old_template_path='./templates',
                         screen_size=(1000, 600))

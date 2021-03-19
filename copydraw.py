@@ -4,7 +4,6 @@ Created on Mon Nov 30 10:59:38 2020
 
 @author: Daniel
 """
-import pdb
 
 import numpy as np
 import pandas as pd
@@ -13,7 +12,6 @@ import time
 import logging
 import random
 import utils
-import processing
 import json
 
 from elements import create_element
@@ -22,8 +20,6 @@ from psychopy import core, event, clock
 from psychopy.tools.monitorunittools import convertToPix  # , posToPix
 from pathlib import Path
 from scipy.interpolate import splprep, splev  # abandon this smoothing method?
-from template_image import template_to_image
-from getScore import get_score_from_trace
 
 logger = logging.getLogger('CopyDraw')
 
@@ -65,7 +61,6 @@ class ManyShapeStim:
     def draw(self):
         for shape in self.shapes:
             shape.draw()
-
 
 
 class CopyDraw(AbstractParadigm):
@@ -441,10 +436,10 @@ class CopyDraw(AbstractParadigm):
         self.frame_elements['template'] = create_element(
             'template',
             win=self.win,
-            image=template_to_image(
+            image=utils.template_to_image(
                 self.get_stimuli(stimuli_idx, scale=scale),
                 f'{self.stimuli_fname[:-4]}_{stimuli_idx}',
-                'template_images',
+                self.data_dir/'template_images',
                 lineWidth=15
             )
         )
@@ -619,6 +614,8 @@ class CopyDraw(AbstractParadigm):
             # MD: The condition down below did not work for me as fillColor returns
             # an array for me with [-1, 1, 1]
             # if self.frame_elements['start_point'].fillColor == 'Cyan':
+            # DW: This throws an error for me.. I should update the yaml (it's
+            # very old, incase our Psychopy versions are out of sync
             if all(self.frame_elements['start_point'].fillColor == [-1, 1, 1]):
 
                 # drawing has begun
@@ -646,65 +643,6 @@ class CopyDraw(AbstractParadigm):
                     break
 
         return ptt, start_t_stamp, cursor_t
-
-    # Should these processing functions be in a separate file?
-    # or remain as methods?
-    #
-    # MD: -> spare file please
-    def process_session(self, session_name=None):
-        session_name_ = session_name or self.session_name  # is this ok?
-        session_dir = self.results_dir / session_name_
-        # list blocks
-        all_blocks = [f for f in session_dir.rglob('*/**')
-                      if 'info_runs' not in f.name]
-        # loop over blocks
-        for block_path in all_blocks:
-
-            # scoring each block and saving
-            self.process_block(block_path)
-
-    def process_block(self, block_path):
-
-        # this assumes trial scores are saved as pickle
-        all_trials = [f for f in block_path.rglob('tscore*.pkl')]
-
-        for trial_path in all_trials:
-            self.process_trial(trial_path)
-
-    def process_trial(self, trial_path):  # this is where the processing is done
-        df = pd.read_pickle(trial_path)
-        res = {}
-        res['ptt'] = df.ptt
-        res['startTStamp'] = df.start_t_stamp
-        res['ix_trial'] = df.ix_trial
-        res['ix_block'] = df.ix_block
-        # both trace and template should have the same starting point
-        # use this to scale things
-        sf = df.trace_let[0] / df.template[0]
-        scaled_template = df.template * sf
-        res['scaled_template'] = scaled_template
-        res['sf'] = sf
-        scores = processing.computeScoreSingleTrial(df.trace_let,
-                                                    scaled_template,
-                                                    df.trial_time)
-        res = {**res, **scores}
-
-        score = get_score_from_trace(df.trace_let, scaled_template,
-                                     df.theBoxPix, df.winSize)
-
-        res['score'] = score
-
-        self.save_processed_trial(res, trial_path)
-
-    def save_processed_trial(self, res, trial_path):
-        block_dir = trial_path.parents[0]
-        fname = f"processed_scores_trial_{res['ix_trial']}" \
-                f"_block{res['ix_block']}.pkl"
-
-        df = pd.Series(res)
-        if self.verbose:
-            print(f"Saving trial {res['ix_trial']} block {res['ix_block']}")
-        df.to_pickle(block_dir / fname)
 
     def _create_trial_res(self, trace_let, trial_time, ptt, start_t_stamp,
                           trace_let_pix, scale, cursor_t):
@@ -748,7 +686,6 @@ class CopyDraw(AbstractParadigm):
         # self.trial_results['templatePix'] = self.frame_elements[
         #     'template'].verticesPix
         # do i need to add theWord? maybe - is the index enough?
-
 
     def _adjust_time_bar(self, ratio, time_bar_x):
         """ Method for adjusting the size of time bar. Wrote

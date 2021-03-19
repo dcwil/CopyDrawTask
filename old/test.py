@@ -13,8 +13,8 @@ import pandas as pd
 from copydraw import CopyDraw
 
 
-scores = sio.loadmat('sample_data/scores_copyDraw_block01.mat',simplify_cells=True)
-templates = sio.loadmat('templates/Size_20.mat',simplify_cells=True)
+scores = sio.loadmat('../sample_data/scores_copyDraw_block01.mat', simplify_cells=True)
+templates = sio.loadmat('../templates/Size_20.mat', simplify_cells=True)
 
 test_trial = scores['block_perf'][5]
 
