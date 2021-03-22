@@ -12,6 +12,7 @@ import matplotlib.ticker as ticker
 
 from pathlib import Path
 from numpy.linalg import norm
+# Keep all utils in here, or have separate utils files for different bits?
 
 
 def remove_nans_2d(arr):

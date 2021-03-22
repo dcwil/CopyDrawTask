@@ -13,6 +13,7 @@ import logging
 import random
 import utils
 import json
+import pyglet as pg
 
 from elements import create_element
 from base import AbstractParadigm
@@ -69,7 +70,7 @@ class CopyDraw(AbstractParadigm):
     def __init__(self,
                  data_dir,
                  screen_size=(920, 1200),  # 16:10 ratio
-                 screen_ix=0,
+                 screen_ix=None,
                  flip=True,
                  lpt_address=None,
                  serial_nr=None,
@@ -89,7 +90,7 @@ class CopyDraw(AbstractParadigm):
         self.old_template_path = old_template_path
 
         self.results_dir = self.data_dir / 'results'
-
+        self.screen_ix = screen_ix or self.select_display()['screen']
         # define attributes to be properly defined later (POLS)
         # maybe also look through and remove unnecessary ones
         self.session_name = None
@@ -136,6 +137,44 @@ class CopyDraw(AbstractParadigm):
         # Change the prints to leg messages when you figure out how to log stuff
         if self.verbose:
             print('initialised')
+
+    def select_display(self):
+
+        """ Select the screen to display the task to
+
+        NOTE: Looking at screens[0].display.x_screen and
+        Looking at screens[0].display.x_screen is seems
+        like a setup with an extended screen has only
+        one number (screen index) with shifted coords,
+        as can be accessed by screen[0].y or .x
+
+        """
+        screens = pg.canvas.Display().get_screens()
+
+        if len(screens) > 1:
+            print(f"Found {len(screens)} screens with the following settings:"
+                  ''.join([f"\nScreen {i}: \n {s}" for i, s in enumerate(screens)]))
+            resp = -1
+            while resp not in list(range(len(screens))):
+                inp = input("\nPlease select one of "
+                            + str(list(range(len(screens))))
+                            + " : ")
+                resp = int(inp)
+
+            ix_scr = resp
+        else:
+            ix_scr = 0
+
+        screen_conf = {'screen': ix_scr}
+        # check if the internal indeces agree, if yes -> shift if necessary
+        # to the correct screen
+        if all([s.display.x_screen == screens[0].display.x_screen
+                for s in screens]):
+            # now assume that .x and .y of the selected screen correspond
+            # to the offsets to the main display
+            screen_conf['pos'] = [screens[ix_scr].x, screens[ix_scr].y]
+
+        return screen_conf
 
     def init_session(self, session_name=None):
 
@@ -600,20 +639,20 @@ class CopyDraw(AbstractParadigm):
 
         while True:
             # only show instructions if start_point not clicked
-            if self.frame_elements['start_point'].fillColor != 'Cyan':
+            if (self.frame_elements['start_point'].fillColor != [-1, 1, 1]).all():
                 self.draw_and_flip(exclude=['trace'])
             else:
                 self.draw_and_flip(exclude=['trace', 'instructions'])
 
             # click in start_point
             if mouse.isPressedIn(self.frame_elements['start_point']):
-                self.frame_elements['start_point'].fillColor = 'Cyan'
+                self.frame_elements['start_point'].fillColor = [-1, 1, 1]
                 tic = clock.getTime()
                 self.draw_and_flip(exclude=['trace', 'instructions'])
 
             # MD: The condition down below did not work for me as fillColor returns
             # an array for me with [-1, 1, 1]
-            # if self.frame_elements['start_point'].fillColor == 'Cyan':
+            # if self.frame_elements['start_point'].fillColor == [-1, 1, 1]:
             # DW: This throws an error for me.. I should update the yaml (it's
             # very old, incase our Psychopy versions are out of sync
             if all(self.frame_elements['start_point'].fillColor == [-1, 1, 1]):
