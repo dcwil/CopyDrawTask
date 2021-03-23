@@ -45,7 +45,8 @@ static_params = {
     'start_point': {
         'pos': (-0.8, 0.7),
         'fillColor': 'Black',
-        'lineColor': 'Cyan'
+        'lineColor': 'Cyan',
+        'units': 'norm'
     },
     'time_bar': {
         'pos': (0, -0.85),

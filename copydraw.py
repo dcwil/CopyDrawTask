@@ -13,7 +13,6 @@ import logging
 import random
 import utils
 import json
-import pyglet as pg
 
 from elements import create_element
 from base import AbstractParadigm
@@ -21,7 +20,7 @@ from psychopy import core, event, clock
 from psychopy.tools.monitorunittools import convertToPix  # , posToPix
 from pathlib import Path
 from scipy.interpolate import splprep, splev  # abandon this smoothing method?
-
+from utils import select_display, create_template_order
 logger = logging.getLogger('CopyDraw')
 
 
@@ -82,43 +81,27 @@ class CopyDraw(AbstractParadigm):
                  '../CopyDraw_mat_repo/CopyDrawTask-master/templates/shapes'):
         super().__init__(screen_ix=screen_ix, lpt_address=lpt_address,
                          serial_nr=serial_nr)
+        # should these be one dict or kept separate?
+        self.paths = {}
+        self.names = {}
+        self.stimuli = {'flip': flip}
+        self.block_settings = None  # will be dict
 
-        self.data_dir = Path(data_dir)
+        self.paths['data'] = Path(data_dir)
         self.screen_size = screen_size
-        # self.trial_clock = core.Clock() # use this!
-        self.flip = flip
-        self.old_template_path = old_template_path
-
-        self.results_dir = self.data_dir / 'results'
-        self.screen_ix = screen_ix or self.select_display()['screen']
+        self.paths['old_template'] = old_template_path
+        self.paths['results'] = self.paths['data'] / 'results'
+        self.screen_ix = screen_ix or select_display()['screen']
         # define attributes to be properly defined later (POLS)
         # maybe also look through and remove unnecessary ones
-        self.session_name = None
-        self.session_dir = None
-        self.info_runs = None
         self.block_idx = None
         self.aspect_ratio = None
         # Could put a lot of these into a single params dict or sth?
-        self.n_trials = None
-        self.letter_time = None
-        self.n_letters = None
-        self.image_size = None
-        self.stim_size = None
-        self.finish_when_raised = None
-        self.interp = None
-        self.block_dir = None
         self.trials_vec = None
         self.trial_idx = None
-        self.block_settings = None
-        self.instructions_path = None
         self.old_stimuli = None
         self.the_box = None
-        self.stimuli_fname = None
-        self.stimuli_file = None
-        self.n_templates = None
         self.templates = None
-        self.order = None
-        self.scaling_matrix = None
         self.current_stimulus = None
         self.cursor_start_point = None  # var not attribute? No.
         self.block_results = None
@@ -126,7 +109,6 @@ class CopyDraw(AbstractParadigm):
         self.trace_vertices = None  # var not attribute? No.
         self.trial_results = None
         self.frame_elements = None
-        self.block_name = None
         self._frame_idx = None
 
         self._lifted = True             # track if mouse is currently lifted
@@ -138,56 +120,18 @@ class CopyDraw(AbstractParadigm):
         if self.verbose:
             print('initialised')
 
-    def select_display(self):
-
-        """ Select the screen to display the task to
-
-        NOTE: Looking at screens[0].display.x_screen and
-        Looking at screens[0].display.x_screen is seems
-        like a setup with an extended screen has only
-        one number (screen index) with shifted coords,
-        as can be accessed by screen[0].y or .x
-
-        """
-        screens = pg.canvas.Display().get_screens()
-
-        if len(screens) > 1:
-            print(f"Found {len(screens)} screens with the following settings:"
-                  ''.join([f"\nScreen {i}: \n {s}" for i, s in enumerate(screens)]))
-            resp = -1
-            while resp not in list(range(len(screens))):
-                inp = input("\nPlease select one of "
-                            + str(list(range(len(screens))))
-                            + " : ")
-                resp = int(inp)
-
-            ix_scr = resp
-        else:
-            ix_scr = 0
-
-        screen_conf = {'screen': ix_scr}
-        # check if the internal indeces agree, if yes -> shift if necessary
-        # to the correct screen
-        if all([s.display.x_screen == screens[0].display.x_screen
-                for s in screens]):
-            # now assume that .x and .y of the selected screen correspond
-            # to the offsets to the main display
-            screen_conf['pos'] = [screens[ix_scr].x, screens[ix_scr].y]
-
-        return screen_conf
-
     def init_session(self, session_name=None):
 
         if session_name is None:
-            self.session_name =\
+            self.names['session'] =\
                 time.asctime(time.localtime(time.time())).replace(':', '-')
         else:
-            self.session_name = session_name
-        self.session_dir = self.results_dir / self.session_name
-        self.session_dir.mkdir(parents=True, exist_ok=True)
+            self.names['session'] = session_name
+        self.paths['session'] = self.paths['results'] / self.names['session']
+        self.paths['session'].mkdir(parents=True, exist_ok=True)
 
-        self.info_runs = self.session_dir / 'info_runs'
-        self.info_runs.mkdir(exist_ok=True)
+        self.paths['info_runs'] = self.paths['session'] / 'info_runs'
+        self.paths['info_runs'].mkdir(exist_ok=True)
         self.block_idx = 1  # this gets +1'd every time exec block is called
 
     def init_block(self, block_name=None,
@@ -197,41 +141,41 @@ class CopyDraw(AbstractParadigm):
                    finish_when_raised=True,
                    n_letters=3,
                    stim_size=35,
+                   shuffle=True,
                    interp='smooth',  # {'s':0.001,'n_interp':300},None,'smooth'
                    ):
 
         super().init_block(self.screen_size)
         self.win.color = (-1, -1, -1)
+        self.block_settings = {}
         self.aspect_ratio = self.win.size[0] / self.win.size[1]
-        self.n_trials = n_trials
-        self.letter_time = letter_time
-        self.image_size = image_size
-        self.n_letters = n_letters
-        self.finish_when_raised = finish_when_raised
-        self.interp = interp
-        self.stim_size = stim_size
+        self.block_settings['n_trials'] = n_trials
+        self.block_settings['letter_time'] = letter_time
+        self.block_settings['n_letters'] = n_letters
+        self.block_settings['finish_when_raised'] = finish_when_raised
+        self.block_settings['interp'] = interp
+        self.block_settings['stim_size'] = stim_size
+        self.block_settings['shuffle'] = True
 
-        if block_name is None:
-            time_str = time.asctime(time.localtime(time.time()))
-            self.block_name = f'BLOCK_{time_str.replace(":", "-")}'
-        else:
-            self.block_name = block_name
+        time_str = time.asctime(time.localtime(time.time()))
+        self.block_settings['block_name'] = block_name or\
+                                            f'BLOCK_{time_str.replace(":", "-")}'
 
         # dropped frames
         self.win.recordFrameIntervals = True
 
-        self.load_stimuli(self.data_dir / "templates",
-                          short=True if self.n_letters == 2 else False,
-                          size=self.stim_size)
+        self.load_stimuli(self.paths['data'] / "templates",
+                          short=True if self.block_settings['n_letters'] == 2 else False,
+                          size=self.block_settings['stim_size'])
 
         # instructions
-        self.load_instructions(self.data_dir /
+        self.load_instructions(self.paths['data'] /
                                'instructions' /
                                'instructions.png')
 
         # folders for saving
-        self.block_dir = self.session_dir / self.block_name
-        self.block_dir.mkdir(parents=True, exist_ok=True)
+        self.paths['block'] = self.paths['session'] / self.block_settings['block_name']
+        self.paths['block'].mkdir(parents=True, exist_ok=True)
 
         # create trials vector
         self.trials_vec = {
@@ -246,32 +190,49 @@ class CopyDraw(AbstractParadigm):
         self.trial_idx = 1
 
         # create template order
-        self.create_template_order(shuffle=True)
+        self.stimuli['order'] = create_template_order(self.stimuli,
+                                                      self.block_settings)
 
-        # block settings
-        self.block_settings = {
-            'n_trials': self.n_trials,
-            'letter_time': self.letter_time,
-            'stim_size': self.stim_size,
-            'block_name': self.block_name,
-            'n_letters': self.n_letters,
-            'finish_when_raised': self.finish_when_raised,
-        }
+        # external logger, how to integrate?
+        # # log - use this!
+        # fh = logging.FileHandler(self.paths['block'] / 'debug.log')
+        # fh.setLevel(logging.DEBUG)
+        # logger.addHandler(fh)
+        # formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s \
+        #                               - %(message)s')
+        # fh.setFormatter(formatter)
+        # logger.addHandler(fh)
+        # logger.info(f'Block "{self.block_settings["block_name"]}" initialised')
 
-        # log - use this!
-        fh = logging.FileHandler(self.block_dir / 'debug.log')
-        fh.setLevel(logging.DEBUG)
-        logger.addHandler(fh)
-        formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s \
-                                      - %(message)s')
-        fh.setFormatter(formatter)
-        logger.addHandler(fh)
-        logger.info(f'Block "{self.block_name}" initialised')
+    def exec_block(self, cfg, stim='off'):
+        """ Will call init_block(**cfg) before calling exec trial n_trials
+        times, also calling save_trial for each. Trials vector and block
+         settings saved at the end. """
 
-    def load_instructions(self, path):
-        self.instructions_path = Path(path)
-        assert self.instructions_path.exists(), f'Instructions file not found \
-            {self.instructions_path}'
+        self.init_block(**cfg)
+
+        # call exec trial 12? times
+        if self.verbose:
+            print(f'executing block {self.block_idx}')
+
+        self.block_results = {}
+
+        for stimuli_idx in range(self.block_settings['n_trials']):
+            self.exec_trial(stimuli_idx)
+            self.save_trial()  # should this call be outside of here?
+            self.trial_idx += 1
+            # run some kind of check_trial func here?
+            self.block_results[stimuli_idx] = self.trial_results
+
+        self.save_trials_vector()
+        self.save_block_settings()
+        self.block_settings = None  # 'reset' block settings
+        self.block_idx += 1
+
+    def load_instructions(self, path):  # This seems kind of useless, remove?
+        self.paths['instructions'] = Path(path)
+        assert self.paths['instructions'].exists(), f'Instructions file not found \
+            {self.paths["instructions"]}'
         if self.verbose:
             print('instructions loaded')
 
@@ -281,15 +242,15 @@ class CopyDraw(AbstractParadigm):
         # MD: Actually, we should not use this old data, especially since
         # this directory is not self-sufficient with this
 
-        old_stim_path = Path(self.data_dir, self.old_template_path)
+        old_stim_path = Path(self.paths['data'], self.paths['old_template'])
         assert old_stim_path.exists(), f"old Stimuli data not " \
                                        f"found: {old_stim_path}"
 
         # does this handle size_10 > size_1?
         # map new nomenclature to old style
-        folder = (self.stimuli_fname.replace('5', '.5')
-                  if '5.' in self.stimuli_fname
-                  else self.stimuli_fname)[:-4]
+        folder = (self.stimuli['fname'].replace('5', '.5')
+                  if '5.' in self.stimuli['fname']
+                  else self.stimuli['fname'])[:-4]
 
         # get all mat files within folder
         stim_files = [f for f in old_stim_path.joinpath(folder).rglob('*.mat')]
@@ -324,42 +285,42 @@ class CopyDraw(AbstractParadigm):
         return self.the_box
 
     def load_stimuli(self, path, short=True, size=35):
-        self.stimuli_fname = f'Size_{"short_" if short else ""}{size}.mat'
-        stimuli_path = Path(path, self.stimuli_fname)
+        self.stimuli['fname'] = f'Size_{"short_" if short else ""}{size}.mat'
+        self.paths['stimuli'] = Path(path, self.stimuli['fname'])
         if self.verbose:
-            print(f'loading stimuli: {stimuli_path}')
-        assert stimuli_path.exists(), f"Stimuli data not found: {stimuli_path}"
+            print(f'loading stimuli: {self.paths["stimuli"]}')
+        assert self.paths['stimuli'].exists(), f"Stimuli data not found: {self.paths['stimuli']}"
 
         try:
-            self.stimuli_file = scipy.io.loadmat(stimuli_path)
+            self.stimuli['file'] = scipy.io.loadmat(self.paths['stimuli'])
             if self.verbose:
                 print('loaded mat file')
-            self.templates = self.stimuli_file['new_shapes'][0]
+            self.templates = self.stimuli['file']['new_shapes'][0]
         except Exception as err:  # rewrite
             if self.verbose:
                 print(err)
         if self.verbose:
             print('stimuli loaded')
 
-        self.n_templates = self.templates.shape[0]
+        self.stimuli['n_templates'] = self.templates.shape[0]
 
-    # could be in a separate file, seems like a util
-    def create_template_order(self, shuffle=True):
-        # requires stimuli to be loaded & n_trials to have been defined
-        if self.n_templates % self.n_trials != 0:
-            # change to a proper warning message?
-            if self.verbose:
-                print(f'WARNING: {self.n_trials} trials means that '
-                      f'there will be an uneven number of templates')
-
-        self.order = [(i % self.n_templates) for i in range(self.n_trials)]
-
-        if shuffle:
-            random.shuffle(self.order)
-
-            # reshuffle to remove repeated trials showing
-            while 0 in np.diff(np.array(self.order)):
-                random.shuffle(self.order)
+    # # could be in a separate file, seems like a util
+    # def create_template_order(self, shuffle=True):
+    #     # requires stimuli to be loaded & n_trials to have been defined
+    #     if self.stimuli['n_templates'] % self.block_settings['n_trials'] != 0:
+    #         # change to a proper warning message?
+    #         if self.verbose:
+    #             print(f'WARNING: {self.block_settings["n_trials"]} trials means that '
+    #                   f'there will be an uneven number of templates')
+    #
+    #     self.stimuli['order'] = [(i % self.stimuli['n_templates']) for i in range(self.block_settings['n_trials'])]
+    #
+    #     if shuffle:
+    #         random.shuffle(self.stimuli['order'])
+    #
+    #         # reshuffle to remove repeated trials showing
+    #         while 0 in np.diff(np.array(self.stimuli['order'])):
+    #             random.shuffle(self.stimuli['order'])
 
     def get_stimuli(self, stimuli_idx, scale=True):
 
@@ -367,14 +328,14 @@ class CopyDraw(AbstractParadigm):
             self.current_stimulus = self.templates[stimuli_idx].astype(float)
             self.get_box(stimuli_idx)
             self.trials_vec['id'].append(stimuli_idx)
-            self.trials_vec['lengths'].append(self.n_letters)
+            self.trials_vec['lengths'].append(self.block_settings['n_letters'])
             if scale:
 
-                self.current_stimulus, self.scaling_matrix = \
+                self.current_stimulus, self.stimuli['scaling_matrix'] = \
                     utils.scale_to_norm_units(self.current_stimulus)
                 self.the_box, _ = \
                     utils.scale_to_norm_units(self.the_box,
-                                              scaling_matrix=self.scaling_matrix)
+                                              scaling_matrix=self.stimuli['scaling_matrix'])
 
                 # reorder
                 new_box_array = np.zeros([4, 2])
@@ -386,23 +347,23 @@ class CopyDraw(AbstractParadigm):
 
                 if self.verbose:
                     print('scaled')
-                if self.flip:
+                if self.stimuli['flip']:
                     self.current_stimulus = np.matmul(self.current_stimulus,
                                                       np.array([[1, 0], [0, -1]]))
                     self.the_box = np.matmul(self.the_box,
                                              np.array([[1, 0], [0, -1]]))
 
-            if self.interp == 'smooth':
+            if self.block_settings['interp'] == 'smooth':
                 self.current_stimulus = utils.smooth(self.current_stimulus,
                                                      return_df=False)
 
-            elif self.interp is not None:
-                tck, u = splprep(self.current_stimulus.T, s=self.interp['s'])
+            elif self.block_settings['interp'] is not None:
+                tck, u = splprep(self.current_stimulus.T, s=self.block_settings['interp']['s'])
 
                 # using a high value for n_interp along with manyshape == True
                 # results in laggy performance
 
-                u_new = np.linspace(np.min(u), np.max(u), self.interp['n_interp'])
+                u_new = np.linspace(np.min(u), np.max(u), self.block_settings['interp']['n_interp'])
                 self.current_stimulus = np.array(splev(u_new, tck)).T
                 # note this is replacing the original points, not adding
 
@@ -421,38 +382,20 @@ class CopyDraw(AbstractParadigm):
             logger.error('Failed with IndexError, probably related to number \
                          of templates')
 
-    def exec_block(self):
-        # call exec trial 12? times
-        if self.verbose:
-            print(f'executing block {self.block_idx}')
-
-        self.block_results = {}
-
-        for stimuli_idx in range(self.n_trials):
-            self.exec_trial(stimuli_idx)
-            self.save_trial()  # should this call be outside of here?
-            self.trial_idx += 1
-            # run some kind of check_trial func here?
-            self.block_results[stimuli_idx] = self.trial_results
-
-        self.save_trials_vector()
-        self.save_block_settings()
-        self.block_idx += 1
-
     def save_trial(self):
         # rudimentary atm, can ble cleaned up, flattened a little maybe
         df = pd.Series(self.trial_results)
         fname = f'tscore_{self.trial_idx}copyDraw_block{self.block_idx}.pkl'
-        df.to_pickle(self.block_dir / fname)
+        df.to_pickle(self.paths['block'] / fname)
 
     def save_block_settings(self):
-        fname = self.info_runs / f'block_{self.block_idx}_fbsettings.json'
+        fname = self.paths['info_runs'] / f'block_{self.block_idx}_fbsettings.json'
         with open(fname, 'w') as h:
             json.dump(self.block_settings, h)
 
     def save_trials_vector(self):
         # maybe change from json later, this is nice and readable fornow
-        fname = self.block_dir / f'tinfo_copyDraw_block{self.block_idx}.json'
+        fname = self.paths['block'] / f'tinfo_copyDraw_block{self.block_idx}.json'
         with open(fname, 'w') as h:
             json.dump(self.trials_vec, h)
 
@@ -477,8 +420,8 @@ class CopyDraw(AbstractParadigm):
             win=self.win,
             image=utils.template_to_image(
                 self.get_stimuli(stimuli_idx, scale=scale),
-                f'{self.stimuli_fname[:-4]}_{stimuli_idx}',
-                self.data_dir/'template_images',
+                f'{self.stimuli["fname"][:-4]}_{stimuli_idx}',
+                self.paths['data']/'template_images',
                 lineWidth=15
             )
         )
@@ -511,7 +454,7 @@ class CopyDraw(AbstractParadigm):
         self.frame_elements['trial_number'] = create_element(
             'trial_number',
             win=self.win,
-            text=f'Trial {self.trial_idx}/{self.n_trials}',
+            text=f'Trial {self.trial_idx}/{self.block_settings["n_trials"]}',
         )
 
         self.frame_elements['cursor'] = create_element(
@@ -542,7 +485,7 @@ class CopyDraw(AbstractParadigm):
         self.frame_elements['instructions'] = create_element(
             'instructions',
             win=self.win,
-            image=self.instructions_path
+            image=self.paths['instructions']
         )
 
         # start_point
@@ -567,10 +510,10 @@ class CopyDraw(AbstractParadigm):
 
         # define duration as how long it runs for max, trial_time as actual
         # runtime (finish when raised etc)
-        self.trial_duration = self.n_letters * self.letter_time
+        self.trial_duration = self.block_settings['n_letters'] * self.block_settings['letter_time']
 
         # initialise the frame
-        self.create_frame(self.order[stimuli_idx], scale=scale)
+        self.create_frame(self.stimuli['order'][stimuli_idx], scale=scale)
 
         # getting a monitor gamut error when doing rgb colours, look into it
         # self.trace.colorSpace = 'rgb255'
@@ -581,12 +524,9 @@ class CopyDraw(AbstractParadigm):
         # time_bar
         time_bar_x = self.frame_elements['time_bar'].size[0]
 
-        # mouse
-        mouse = event.Mouse()
-
         # main bit
         self._frame_idx = 0  # refers only to frames during drawing trace
-        ptt, start_t_stamp, cursor_t = self._run_trial_main_loop(clock, mouse,
+        ptt, start_t_stamp, cursor_t = self._run_trial_main_loop(clock,
                                                                  time_bar_x)
 
         cursor_t = cursor_t[:self._frame_idx+1]  # truncate
@@ -615,7 +555,6 @@ class CopyDraw(AbstractParadigm):
         trace_let_pix = np.concatenate([self.frame_elements[tr_n].verticesPix.copy()
                                         for tr_n in self.traces])
 
-
         self._create_trial_res(trace_let, trial_time, ptt, start_t_stamp,
                                trace_let_pix, scale, cursor_t)
 
@@ -623,12 +562,11 @@ class CopyDraw(AbstractParadigm):
         self.finish_block()  # base class method
         # core.quit()
 
-    def _run_trial_main_loop(self, clock, mouse, time_bar_x):
+    def _run_trial_main_loop(self, clock, time_bar_x):
         """ To run the main drawing loop """
-
         started_drawing = False
         cursor_t = np.zeros([10000])  # for recording times with cursor pos
-
+        mouse = event.Mouse(win=self.win)
         #MD: Probably a better pattern -> two separate while loops,
         #   one for activating the cyan square and moving to the beginning
         #   then another one drawing and incrementing the bar
@@ -636,50 +574,51 @@ class CopyDraw(AbstractParadigm):
         # As it is currently done, we have to evaluate all the ifs during each
         # while cycle
         # ---> actually this is what is happening...
-
         while True:
-            # only show instructions if start_point not clicked
-            if (self.frame_elements['start_point'].fillColor != [-1, 1, 1]).all():
-                self.draw_and_flip(exclude=['trace'])
-            else:
-                self.draw_and_flip(exclude=['trace', 'instructions'])
-
-            # click in start_point
+            self.draw_and_flip(exclude=['trace'])
+            if self.verbose:
+                if mouse.getPressed()[0]:
+                    print(f'mouse pressed in pos: {mouse.getPos()}')
             if mouse.isPressedIn(self.frame_elements['start_point']):
+                if self.verbose:
+                    print('start point pressed')
+                # change to cyan
+                # MD: The condition down below did not work for me as fillColor returns
+                # an array for me with [-1, 1, 1]
+                # if self.frame_elements['start_point'].fillColor == [-1, 1, 1]:
+                # DW: This throws an error for me.. I should update the yaml (it's
+                # very old, incase our Psychopy versions are out of sync UPDATE:
+                # I updated to Psychopy 2021.1.3 and got the same behaviour as you
+                # if all(self.frame_elements['start_point'].fillColor == [-1, 1, 1]):
                 self.frame_elements['start_point'].fillColor = [-1, 1, 1]
                 tic = clock.getTime()
                 self.draw_and_flip(exclude=['trace', 'instructions'])
+                break
 
-            # MD: The condition down below did not work for me as fillColor returns
-            # an array for me with [-1, 1, 1]
-            # if self.frame_elements['start_point'].fillColor == [-1, 1, 1]:
-            # DW: This throws an error for me.. I should update the yaml (it's
-            # very old, incase our Psychopy versions are out of sync
-            if all(self.frame_elements['start_point'].fillColor == [-1, 1, 1]):
+        while True:
+            # drawing has begun
+            if mouse.isPressedIn(self.frame_elements['cursor']):
+                started_drawing = True
+                self._lifted = False
 
-                # drawing has begun
-                if mouse.isPressedIn(self.frame_elements['cursor']):
-                    started_drawing = True
-                    self._lifted = False
+                trial_timer = clock.CountdownTimer(self.trial_duration)
 
-                    trial_timer = clock.CountdownTimer(self.trial_duration)
+                # save start time
+                start_t_stamp = clock.getTime()
 
-                    # save start time
-                    start_t_stamp = clock.getTime()
+                # calc pre trial time
+                ptt = start_t_stamp - tic
 
-                    # calc pre trial time
-                    ptt = start_t_stamp - tic
+            # shrink time bar, draw trace, once drawing has started
+            if started_drawing:
 
-                # shrink time bar, draw trace, once drawing has started
-                if started_drawing:
+                self._exec_drawing(trial_timer, mouse, time_bar_x, cursor_t)
 
-                    self._exec_drawing(trial_timer, mouse, time_bar_x, cursor_t)
+                # time_bar elapsed
+                if self.verbose:
+                    print('breaking out of main')
 
-                    # time_bar elapsed
-                    if self.verbose:
-                        print('breaking out of main')
-
-                    break
+                break
 
         return ptt, start_t_stamp, cursor_t
 
@@ -695,10 +634,10 @@ class CopyDraw(AbstractParadigm):
 
         # new/extra metadata
         if scale:
-            self.trial_results['scaling_matrix'] = self.scaling_matrix
+            self.trial_results['scaling_matrix'] = self.stimuli['scaling_matrix']
 
         self.trial_results['trial_duration'] = self.trial_duration
-        self.trial_results['flip'] = self.flip
+        self.trial_results['flip'] = self.stimuli['flip']
         self.trial_results['the_box'] = self.frame_elements[
             'the_box'].vertices.copy()
 
@@ -806,7 +745,7 @@ class CopyDraw(AbstractParadigm):
                 self.draw_and_flip(exclude=['instructions'])
 
             if (not mouse.getPressed()[
-                0] and self.finish_when_raised):
+                0] and self.block_settings['finish_when_raised']):
                 if self.verbose:
                     print('mouse raised - ending')
                 # main_loop = False

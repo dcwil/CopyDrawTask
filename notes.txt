@@ -89,3 +89,11 @@ cprofile snakeviz
 points of least distance dist t: 3rd party implementation, dtw-python? (run through a full dataset) investigate which step pattern
 
 folder!
+
+exec_block(cfg, stim=str)
+
+config file, yaml
+
+rename infor runs to output
+
+be able to run test_exp flow

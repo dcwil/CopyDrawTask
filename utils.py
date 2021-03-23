@@ -5,14 +5,54 @@ Created on Thu Dec 17 14:30:26 2020
 @author: Daniel
 """
 import pandas as pd
+import pyglet as pg
 import numpy as np
 import scipy.io
+import random
 import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
 
 from pathlib import Path
 from numpy.linalg import norm
 # Keep all utils in here, or have separate utils files for different bits?
+
+
+def select_display():
+    """ Select the screen to display the task to
+
+    NOTE: Looking at screens[0].display.x_screen and
+    Looking at screens[0].display.x_screen is seems
+    like a setup with an extended screen has only
+    one number (screen index) with shifted coords,
+    as can be accessed by screen[0].y or .x
+
+    """
+    screens = pg.canvas.Display().get_screens()
+
+    if len(screens) > 1:
+        print(f"Found {len(screens)} screens with the following settings:"
+              ''.join([f"\nScreen {i}: \n {s}" for i, s in enumerate(screens)]))
+        resp = -1
+        while resp not in list(range(len(screens))):
+            inp = input("\nPlease select one of "
+                        + str(list(range(len(screens))))
+                        + " : ")
+            resp = int(inp)
+
+        ix_scr = resp
+    else:
+        ix_scr = 0
+
+    screen_conf = {'screen': ix_scr}
+    # check if the internal indeces agree, if yes -> shift if necessary
+    # to the correct screen
+    if all([s.display.x_screen == screens[0].display.x_screen
+            for s in screens]):
+        # now assume that .x and .y of the selected screen correspond
+        # to the offsets to the main display
+        screen_conf['pos'] = [screens[ix_scr].x, screens[ix_scr].y]
+
+    return screen_conf
 
 
 def remove_nans_2d(arr):
@@ -205,3 +245,22 @@ def template_to_image(template, fname, path, **kwargs):
 
     return fullpath
 
+
+def create_template_order(stimuli_dict, block_settings_dict):
+    # requires stimuli to be loaded & n_trials to have been defined
+    if stimuli_dict['n_templates'] % block_settings_dict['n_trials'] != 0:
+        # change to a proper warning message?
+        print(f'WARNING: {block_settings_dict["n_trials"]} trials means that '
+              f'there will be an uneven number of templates')
+
+    order = [(i % stimuli_dict['n_templates'])
+                             for i in range(block_settings_dict['n_trials'])]
+
+    if block_settings_dict['shuffle']:
+        random.shuffle(order)
+
+        # reshuffle to remove repeated trials showing
+        while 0 in np.diff(np.array(order)):
+            random.shuffle(order)
+
+    return order
