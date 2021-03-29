@@ -53,7 +53,7 @@ class AbstractParadigm(abc.ABC):
     # def init_block(self):
     #     self.win = visual.Window(fullscr=True, screen=self.screen_ix,units='norm')
     #     self.fixation = self.get_fixation()
-    def init_block(self,size=None): #this is different from the original base class
+    def init_block(self, size=None): #this is different from the original base class
         self.win = visual.Window(screen=self.screen_ix,
                                  units='norm',
                                  fullscr=True if size==None else False,

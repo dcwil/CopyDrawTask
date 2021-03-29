@@ -229,10 +229,14 @@ def check_with_tol(x, y, tol=0.0001):
 
 
 def template_to_image(template, fname, path, **kwargs):
-    fullpath = Path(path, f'{fname}.png')
+
+    # if template images dir doesn't exists make it
+    path = Path(path)
+    path.mkdir(exist_ok=True, parents=True)
+
+    fullpath = path.joinpath(f'{fname}.png')
 
     if not fullpath.exists():
-        fullpath.mkdir(exist_ok=True)
         plt.figure(figsize=(16, 10))
         plt.plot(template.T[0], template.T[1],
                  **kwargs)  # how can i remove this from being shown?
@@ -248,7 +252,7 @@ def template_to_image(template, fname, path, **kwargs):
 
 def create_template_order(stimuli_dict, block_settings_dict):
     # requires stimuli to be loaded & n_trials to have been defined
-    if stimuli_dict['n_templates'] % block_settings_dict['n_trials'] != 0:
+    if block_settings_dict['n_trials'] % stimuli_dict['n_templates'] != 0:
         # change to a proper warning message?
         print(f'WARNING: {block_settings_dict["n_trials"]} trials means that '
               f'there will be an uneven number of templates')

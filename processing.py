@@ -6,7 +6,9 @@ Created on Mon Mar  1 11:48:38 2021
 """
 
 # this is where everything that is done after the experiment should go
-
+# TODO: varying screen size etc can scale the recorded template so it no longer
+# aligns with the original. Write a function ( align()? ) that lines them up,
+# using the fact that the start point in both should always be the same
 import utils
 import numpy as np
 import dtw_py

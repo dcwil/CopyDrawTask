@@ -57,7 +57,7 @@ static_params = {
         'units': 'norm',
         'pos': (-0.0025, -0.002),
         'interpolate': True,
-        'size': 1.6725
+        # 'size': 1.6725  # now hardcoded elsewhere
     }
 }
 

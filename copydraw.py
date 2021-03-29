@@ -35,7 +35,6 @@ class CopyDraw(AbstractParadigm):
 
     def __init__(self,
                  data_dir,
-                 screen_size=(920, 1200),  # 16:10 ratio
                  screen_ix=None,
                  flip=True,  # should this be passed in somewhere else?
                  lpt_address=None,
@@ -61,7 +60,6 @@ class CopyDraw(AbstractParadigm):
         self.block_settings = None  # will be dict
 
         self.paths['data'] = Path(data_dir)
-        self.screen_size = screen_size
         self.paths['results'] = self.paths['data'] / 'results'
         self.screen_ix = screen_ix or select_display()['screen']
 
@@ -82,7 +80,7 @@ class CopyDraw(AbstractParadigm):
         if self.verbose:
             print('initialised')
 
-    def init_session(self, session_name=None):
+    def init_session(self, session_name=None, screen_size=(1000, 600)):
 
         if session_name is None:
             self.names['session'] =\
@@ -91,25 +89,28 @@ class CopyDraw(AbstractParadigm):
             self.names['session'] = session_name
         self.paths['session'] = self.paths['results'] / self.names['session']
         self.paths['session'].mkdir(parents=True, exist_ok=True)
-
-        self.paths['info_runs'] = self.paths['session'] / 'info_runs'
-        self.paths['info_runs'].mkdir(exist_ok=True)
+        self.win_settings['screen_size'] = screen_size
+        # self.paths['info_runs'] = self.paths['session'] / 'info_runs'
+        # self.paths['info_runs'].mkdir(exist_ok=True)
         self.block_idx = 1  # this gets +1'd every time exec block is called
 
     def init_block(self, block_name=None,
                    n_trials=12,
+                   # screen_size=(920, 1200),  # 16:10 ratio
                    letter_time=2.2,
                    finish_when_raised=True,
                    n_letters=3,
-                   stim_size=35,
+                   stim_size=35,  # this is the size of the templates used
+                   size=1.5,  # this is the scaling factor applied to the template
                    shuffle=True,
                    interp=True,
+                   win_color=(-1, -1, -1)
                    ):
 
-        super().init_block(self.screen_size)
-        self.win.color = (-1, -1, -1)
+        super().init_block(self.win_settings['screen_size'])
         self.block_settings = {}
         self.win_settings['aspect_ratio'] = self.win.size[0] / self.win.size[1]
+        self.win_settings['color'] = win_color
         self.block_settings['n_trials'] = n_trials
         self.block_settings['letter_time'] = letter_time
         self.block_settings['n_letters'] = n_letters
@@ -117,6 +118,8 @@ class CopyDraw(AbstractParadigm):
         self.block_settings['interp'] = interp
         self.block_settings['stim_size'] = stim_size
         self.block_settings['shuffle'] = True
+        self.block_settings['size'] = size
+        self.win.color = self.win_settings['color']
 
         time_str = time.asctime(time.localtime(time.time()))
         self.block_settings['block_name'] = \
@@ -312,7 +315,7 @@ class CopyDraw(AbstractParadigm):
         df.to_pickle(self.paths['block'] / fname)
 
     def save_block_settings(self):
-        fname = self.paths['info_runs'] / f'block_{self.block_idx}_fbsettings.json'
+        fname = self.paths['block'] / f'block_{self.block_idx}_fbsettings.json'
         with open(fname, 'w') as h:
             json.dump(self.block_settings, h)
 
@@ -348,7 +351,8 @@ class CopyDraw(AbstractParadigm):
                 f'{self.stimuli["fname"][:-4]}_{stimuli_idx}',
                 self.paths['data']/'template_images',
                 lineWidth=15
-            )
+            ),
+            size=self.block_settings['size'] * 1.6725  # scaling
         )
         # uncomment below to draw old template to check how the image
         # matches up with it
@@ -386,7 +390,10 @@ class CopyDraw(AbstractParadigm):
             'cursor',
             win=self.win,
             pos=convertToPix(
-                self.trial_settings['cursor_start_pos'] * 1.5,
+                # so the 1.5 comes from how much the original template had to be scaled by after being converted
+                # to norm units. the 1.6.. in the template section is how much the resulting image of the template had
+                # to be scaled by in order to match up with the original template when drawn on top of each other
+                self.trial_settings['cursor_start_pos'] * 1.5 * self.block_settings['size'],
                 (0, 0),
                 'norm',
                 self.win
@@ -396,7 +403,7 @@ class CopyDraw(AbstractParadigm):
         max_trace_len = 10000  # Should be more points than would ever be drawn
         self.frame['trace_vertices'] = np.zeros([max_trace_len, 2])
         self.frame['trace_vertices'][0] = \
-            convertToPix(self.trial_settings['cursor_start_pos'] * 1.5,
+            convertToPix(self.trial_settings['cursor_start_pos'] * 1.5 * self.block_settings['size'],
                          (0, 0),
                          'norm',
                          self.win)
