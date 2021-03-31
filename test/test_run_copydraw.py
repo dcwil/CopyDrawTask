@@ -55,5 +55,6 @@ if __name__ == "__main__":
 
     logging.basicConfig(filename='test_run.log',
                         format='%(asctime)s - %(levelname)s - %(message)s',
-                        level=logging.DEBUG)
+                        level=logging.DEBUG,
+                        filemore='w')
     run_copy_draw()
