@@ -18,7 +18,6 @@ from psychopy import core, event, clock
 from psychopy.tools.monitorunittools import convertToPix  # , posToPix
 from pathlib import Path
 from utils import select_display, create_template_order
-logger = logging.getLogger('CopyDraw')
 
 
 # boxColour = [160,160,180]
@@ -40,6 +39,8 @@ class CopyDraw(AbstractParadigm):
                  lpt_address=None,
                  serial_nr=None,
                  verbose=True):
+        self.log = logging.getLogger(__name__)
+        self.log.info('Initialising..')
         super().__init__(screen_ix=screen_ix, lpt_address=lpt_address,
                          serial_nr=serial_nr)
         # would it be beneficial to have a method that takes a snapshot of the
@@ -62,6 +63,8 @@ class CopyDraw(AbstractParadigm):
         self.paths['data'] = Path(data_dir)
         self.paths['results'] = self.paths['data'] / 'results'
         self.screen_ix = screen_ix or select_display()['screen']
+        self.log.debug(f'Paths: {self.paths}')
+        self.log.debug(f'Screen: {self.screen_ix}')
 
         self.block_idx = None  # move into block settings? maybe not. Currently needed after block settings reset
         self.trials_vec = None
@@ -76,7 +79,7 @@ class CopyDraw(AbstractParadigm):
         self.frame['start_frame_idx'] = 0       # frame index of the last started trace
 
         self.verbose = verbose  # For debugging, toggles print messages
-        # Change the prints to leg messages when you figure out how to log stuff
+        # Change the prints to leg messages when you figure out how to self.log stuff
         if self.verbose:
             print('initialised')
 
@@ -87,6 +90,7 @@ class CopyDraw(AbstractParadigm):
                 time.asctime(time.localtime(time.time())).replace(':', '-')
         else:
             self.names['session'] = session_name
+        self.log.info(f'Initialised session: {self.names["session"]}')
         self.paths['session'] = self.paths['results'] / self.names['session']
         self.paths['session'].mkdir(parents=True, exist_ok=True)
         self.win_settings['screen_size'] = screen_size
@@ -124,7 +128,7 @@ class CopyDraw(AbstractParadigm):
         time_str = time.asctime(time.localtime(time.time()))
         self.block_settings['block_name'] = \
             block_name or f'BLOCK_{time_str.replace(":", "-")}'
-
+        self.log.info(f'Initialised block: {self.block_settings}\n{self.win_settings}')
         self.load_stimuli(self.paths['data'] / "templates",
                           short=True if self.block_settings['n_letters'] == 2 else False,
                           size=self.block_settings['stim_size'])
@@ -154,16 +158,16 @@ class CopyDraw(AbstractParadigm):
         self.stimuli['order'] = create_template_order(self.stimuli,
                                                       self.block_settings)
 
-        # external logger, how to integrate?
-        # # log - use this!
-        # fh = logging.FileHandler(self.paths['block'] / 'debug.log')
-        # fh.setLevel(logging.DEBUG)
-        # logger.addHandler(fh)
-        # formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s \
+        # external self.logger, how to integrate?
+        # # self.log - use this!
+        # fh = self.logging.FileHandler(self.paths['block'] / 'debug.log')
+        # fh.setLevel(self.logging.DEBUG)
+        # self.logger.addHandler(fh)
+        # formatter = self.logging.Formatter('%(asctime)s - %(name)s - %(levelname)s \
         #                               - %(message)s')
         # fh.setFormatter(formatter)
-        # logger.addHandler(fh)
-        # logger.info(f'Block "{self.block_settings["block_name"]}" initialised')
+        # self.logger.addHandler(fh)
+        # self.logger.info(f'Block "{self.block_settings["block_name"]}" initialised')
 
     def exec_block(self, cfg, stim='off'):
         """ Will call init_block(**cfg) before calling exec trial n_trials
@@ -175,7 +179,7 @@ class CopyDraw(AbstractParadigm):
         # call exec trial 12? times
         if self.verbose:
             print(f'executing block {self.block_idx}')
-
+        self.log.info(f'executing block {self.block_idx}')
         self.block_results = {}
 
         for stimuli_idx in range(self.block_settings['n_trials']):
@@ -187,9 +191,11 @@ class CopyDraw(AbstractParadigm):
 
         self.save_trials_vector()
         self.save_block_settings()
+        self.log.info('Saved block settings')
         self.block_settings = None  # 'reset' block settings
         if self.verbose:
             print('reset block settings')
+        self.log.info('Resetting block settings for new block')
         self.block_idx += 1
 
     def load_instructions(self, path):  # This seems kind of useless, remove?
@@ -253,7 +259,7 @@ class CopyDraw(AbstractParadigm):
             self.trials_vec['id'].append(stimuli_idx)
             self.trials_vec['lengths'].append(self.block_settings['n_letters'])
             if scale:
-
+                self.log.info('Scaling data stim...')
                 self.stimuli['current_stim'], self.stimuli['scaling_matrix'] = \
                     utils.scale_to_norm_units(self.stimuli['current_stim'])
                 self.stimuli['the_box'], _ = \
@@ -271,6 +277,7 @@ class CopyDraw(AbstractParadigm):
                 if self.verbose:
                     print('scaled')
                 if self.stimuli['flip']:
+                    self.log.info('Flippinf data...')
                     self.stimuli['current_stim'] = \
                         np.matmul(self.stimuli['current_stim'],
                                   np.array([[1, 0], [0, -1]]))
@@ -278,6 +285,7 @@ class CopyDraw(AbstractParadigm):
                                                         np.array([[1, 0], [0, -1]]))
 
             if self.block_settings['interp']:
+                self.log.info('Smoothing data...')
                 if self.verbose:
                     print('smoothing')
                 self.stimuli['current_stim'] = \
@@ -299,13 +307,13 @@ class CopyDraw(AbstractParadigm):
         except AttributeError:
             if self.verbose:
                 print('load_stimuli must be called first')
-            logger.error('Failed with AttributeError, probably due to \
+            self.logger.error('Failed with AttributeError, probably due to \
                          load_stimuli not being called')
 
         except IndexError:
             if self.verbose:
                 print(f'only {len(self.stimuli["templates"])} templates')
-            logger.error('Failed with IndexError, probably related to number \
+            self.logger.error('Failed with IndexError, probably related to number \
                          of templates')
 
     def save_trial(self):
@@ -313,6 +321,7 @@ class CopyDraw(AbstractParadigm):
         df = pd.Series(self.trial_results)
         fname = f'tscore_{self.trial_idx}copyDraw_block{self.block_idx}.pkl'
         df.to_pickle(self.paths['block'] / fname)
+        self.log.info(f'Saved trial: {self.paths["block"] / fname}')
 
     def save_block_settings(self):
         fname = self.paths['block'] / f'block_{self.block_idx}_fbsettings.json'
@@ -438,6 +447,8 @@ class CopyDraw(AbstractParadigm):
     # currently they are initialised differently (0 and 1)
     def exec_trial(self, stimuli_idx, scale=True):
         """ Top level method that executes a single trial """
+
+        self.log.info(f'Executing trial with stim idx {stimuli_idx}')
         if self.verbose:
             print('executing trial')
 
@@ -463,18 +474,16 @@ class CopyDraw(AbstractParadigm):
                                                                  time_bar_x)
 
         cursor_t = cursor_t[:self.frame['idx']+1]  # truncate
-        if self.verbose:
-            print(f'drew {self.frame["idx"]} frames')
-            print(f'cursor_t is: {cursor_t.shape} and'
-                  f' has mean diff: {np.mean(np.diff(cursor_t))} and '
-                  f'which has std: {np.std(np.diff(cursor_t))}')
 
         # trial time is how long they were drawing for,
         # ie time elapsed during drawing
         trial_time = self.trial_settings['trial_duration'] - cursor_t[-1]
+        self.log.info(f'Trial lasted {trial_time} seconds')
         if self.verbose:
             print(f"recorded {self.frame['idx']} points at a rate of"
                   f" {self.frame['idx'] / trial_time} points per sec")
+        self.log.info(f'Drew {self.frame["idx"]} frames')
+        self.log.info(f'Recording rate was {len(cursor_t) / trial_time} points per second')
         # should there be any unit conversions done?
 
         # # separate the main loop and data stuff
@@ -492,6 +501,7 @@ class CopyDraw(AbstractParadigm):
                                trace_let_pix, scale, cursor_t)
 
     def exit(self):
+        self.log.info('Exiting')
         self.finish_block()  # base class method
         # core.quit()
 
@@ -511,6 +521,7 @@ class CopyDraw(AbstractParadigm):
         while True:
             self.draw_and_flip(exclude=['trace'])
             if mouse.isPressedIn(self.frame['elements']['start_point']):
+                self.log.debug('Mouse pressed in startpoint')
                 # change to cyan
                 # older psychopy versions use str instead of arr to set color
                 # eg 'Cyan'
@@ -519,9 +530,11 @@ class CopyDraw(AbstractParadigm):
                 self.draw_and_flip(exclude=['trace', 'instructions'])
                 break
 
+
         while True:
             # drawing has begun
             if mouse.isPressedIn(self.frame['elements']['cursor']):
+                self.log.debug('Mouse started drawing with cursor')
                 started_drawing = True
                 self.frame['lifted'] = False
 
@@ -550,6 +563,9 @@ class CopyDraw(AbstractParadigm):
                           trace_let_pix, scale, cursor_t):
         """ Creates the results dict that contains basic/essential trial info
         to be saved. """
+
+        self.log.debug('Creating trial results')
+
         # original data + metadata
         self.trial_results = {'trace_let': trace_let, 'trial_time': trial_time,
                               'ix_block': self.block_idx,
@@ -614,6 +630,7 @@ class CopyDraw(AbstractParadigm):
             new_pos = convertToPix(mouse.getPos(), (0, 0), units=mouse.units,
                                    win=self.win)
         else:
+
             self.frame['lifted'] = True
             new_pos = self.frame['trace_vertices'][self.frame['idx']]
 
@@ -678,20 +695,47 @@ class CopyDraw(AbstractParadigm):
 
 if __name__ == "__main__":
     try:
-        test = CopyDraw('./',
-                        )
+        import logging
+        data_dir = '../'
+        test_cpd = CopyDraw(data_dir,
+                            verbose=True)
+        log = logging.getLogger(__name__)
+        log.info('Started copydraw')
 
-        test.init_session('TEST_SESSION')
+        logging.basicConfig(filename='test_run.log',
+                            format='%(asctime)s - %(levelname)s - %(message)s',
+                            level=logging.DEBUG)
+
+        session_cfg = {
+            'session_name': 'TEST_SESSION',
+            'screen_size': (1000, 600)
+        }
+        test_cpd.init_session(**session_cfg)
+
+        # for integration - will this be a yaml file?
         cfg = {
             'block_name': 'TEST_BLOCK_1',
             'n_trials': 2,
             'letter_time': 2.7,
             'n_letters': 3,
-            'finish_when_raised': False
+            'finish_when_raised': False,
+            'stim_size': 35,
+            'size': 1,  # move into session cfg?
         }
+        test_cpd.exec_block(cfg, stim='off')
 
-        test.exec_block(cfg, stim='off')
-        test.exit()
+        cfg = {
+            'block_name': 'TEST_BLOCK_2',
+            'n_trials': 1,
+            'letter_time': 2.2,
+            'n_letters': 3,
+            'finish_when_raised': False,
+            'stim_size': 35,
+            'size': 0.5,
+        }
+        test_cpd.exec_block(cfg, stim='off')
+
+        test_cpd.exit()
 
     # this still isnt printing the error out, why?
     except Exception as e:
