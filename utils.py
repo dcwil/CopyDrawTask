@@ -146,9 +146,17 @@ def scale_to_norm_units(array,scaling_matrix=None):
         
     scaled_matrix = np.matmul(scaling_matrix, temp_array.T).T[:, :-1]
     return scaled_matrix,scaling_matrix
- 
 
-def smooth(shape,return_df=False):       
+
+def scale_trace_to_template(trace, template):
+    """ NOTE, assumes the trace and template have the same starting position
+    (just in different coord frames) which should be ensured via the code,
+    but there have been bugs in the past changing this"""
+    sf = template[0]/trace[0]
+    return trace*sf
+
+
+def smooth(shape, return_df=False):
         
     # create img
     df = pd.DataFrame(shape, columns=['x', 'y'])

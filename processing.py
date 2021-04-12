@@ -58,7 +58,7 @@ def kin_scores(var_pos, delta_t, sub_sampled=False):
     return kin_res
 
 
-def computeScoreSingleTrial(traceLet, template, trialTime):
+def computeScoreSingleTrial(traceLet, template, trialTime, step_pattern='MATLAB'):
     
     trial_results = {}
     
@@ -76,10 +76,11 @@ def computeScoreSingleTrial(traceLet, template, trialTime):
     trial_results = {**trial_results, **kin_res_sub}
     
     # dtw
-    dtw_res = dtw_py.dtw_features(traceLet, template)
+    dtw_res = dtw_py.dtw_features(traceLet, template, step_pattern=step_pattern)
     dtw_res['pathlen'] = min([dtw_res['pathlen'], template.shape[0]])
     trial_results = {**trial_results, **dtw_res}
 
+    print(dtw_res['pathlen'])
     # misc
     # +1 on the pathlens bc matlab indexing
     # this is a horrible one-liner, it needs breaking up
@@ -141,7 +142,7 @@ def process_trial(trial_path, legacy=False, sf=None):
         tmps = sio.loadmat('templates/Size_20.mat', simplify_cells=True)
         tmp_late = tmps['new_shapes'][word_to_id[mat['theWord']]].astype(float)
 
-        # remove nans from trace (this should be moved into the overall pipeline)
+        # TODO: remove nans from trace (this should be moved into the overall pipeline)
         res['trace_let'] = utils.remove_nans_2d(res['trace_let'])
     else:
 

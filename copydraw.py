@@ -8,10 +8,9 @@ import numpy as np
 import pandas as pd
 import scipy.io
 import time
-import logging
 import utils
 import json
-
+import logging  # Does this need to be in here?
 from elements import create_element
 from base import AbstractParadigm
 from psychopy import core, event, clock
@@ -73,10 +72,6 @@ class CopyDraw(AbstractParadigm):
         self.block_results = None
         self.trial_results = None
 
-        # does lifted need to be reset to True at the end of every trial?
-        self.frame['lifted'] = True             # track if mouse is currently lifted
-        self.frame['traces'] = []                # list to record multiple trace object names --> drawing interupted lines
-        self.frame['start_frame_idx'] = 0       # frame index of the last started trace
 
         self.verbose = verbose  # For debugging, toggles print messages
         # Change the prints to leg messages when you figure out how to self.log stuff
@@ -416,11 +411,12 @@ class CopyDraw(AbstractParadigm):
                          (0, 0),
                          'norm',
                          self.win)
-
+        # TODO: clicking NOT on cursor (post startpoint press) results in no trace being drawn - fix
+        # trace starts to get drawn after sometime - some kind of lag on recording of trace vertices..
         self.frame['elements']['trace1'] = create_element(
            'trace',                           # we will dynamically create more -> draw interupted lines
             win=self.win,
-            vertices=self.frame['trace_vertices'][0:0],          # initialize empty
+            vertices=self.frame['trace_vertices'][0:1],          # initialize empty - now take first point?
         )
         self.frame['traces'].append('trace1')
 
@@ -448,6 +444,11 @@ class CopyDraw(AbstractParadigm):
     def exec_trial(self, stimuli_idx, scale=True):
         """ Top level method that executes a single trial """
 
+        self.frame['lifted'] = True             # track if mouse is currently lifted
+
+        self.frame['start_frame_idx'] = 0       # frame index of the last started trace
+        # Moved here to fix bug regarding number of traces in subsequent trials
+        self.frame['traces'] = []                # list to record multiple trace object names --> drawing interupted lines
         self.log.info(f'Executing trial with stim idx {stimuli_idx}')
         if self.verbose:
             print('executing trial')
@@ -530,7 +531,6 @@ class CopyDraw(AbstractParadigm):
                 self.draw_and_flip(exclude=['trace', 'instructions'])
                 break
 
-
         while True:
             # drawing has begun
             if mouse.isPressedIn(self.frame['elements']['cursor']):
@@ -549,6 +549,8 @@ class CopyDraw(AbstractParadigm):
             # shrink time bar, draw trace, once drawing has started
             if started_drawing:
 
+                if self.verbose:
+                    print('STARTED DRAWING')
                 self._exec_drawing(trial_timer, mouse, time_bar_x, cursor_t)
 
                 # time_bar elapsed
@@ -558,52 +560,6 @@ class CopyDraw(AbstractParadigm):
                 break
 
         return ptt, start_t_stamp, cursor_t
-
-    def _create_trial_res(self, trace_let, trial_time, ptt, start_t_stamp,
-                          trace_let_pix, scale, cursor_t):
-        """ Creates the results dict that contains basic/essential trial info
-        to be saved. """
-
-        self.log.debug('Creating trial results')
-
-        # original data + metadata
-        self.trial_results = {'trace_let': trace_let, 'trial_time': trial_time,
-                              'ix_block': self.block_idx,
-                              'ix_trial': self.trial_idx, 'ptt': ptt,
-                              'start_t_stamp': start_t_stamp}
-
-        # new/extra metadata
-        if scale:
-            self.trial_results['scaling_matrix'] = self.stimuli['scaling_matrix']
-
-        self.trial_results['trial_duration'] = self.trial_settings['trial_duration']
-        self.trial_results['flip'] = self.stimuli['flip']
-        self.trial_results['the_box'] = self.frame['elements'][
-            'the_box'].vertices.copy()
-
-        self.trial_results['theBoxPix'] = self.frame['elements'][
-            'the_box'].verticesPix
-
-        self.trial_results['cursor_t'] = cursor_t
-
-        if (trace_let != trace_let_pix).any():
-            self.trial_results['pos_t_pix'] = trace_let_pix
-
-        # in matlab i think this is theRect
-        self.trial_results['winSize'] = self.win.size
-
-        self.trial_results['template'] = self.stimuli['current_stim']
-        stim_size = self.frame['elements']['template'].size
-        stim_pos = self.frame['elements']['template'].pos
-        self.trial_results['template_pix'] = convertToPix(self.stimuli['current_stim'],
-                                                          units='norm',
-                                                          pos=stim_pos,
-                                                          win=self.win)
-        self.trial_results['template_size'] = stim_size
-        self.trial_results['template_pos'] = stim_pos
-        # self.trial_results['templatePix'] = self.frame['elements'][
-        #     'template'].verticesPix
-        # do i need to add theWord? maybe - is the index enough?
 
     def _adjust_time_bar(self, ratio, time_bar_x):
         """ Method for adjusting the size of time bar. Wrote
@@ -642,7 +598,6 @@ class CopyDraw(AbstractParadigm):
         self.frame['elements']['cursor'].pos = new_pos
 
         # For drawing trace
-
         self._draw_trace(new_pos, new_trace=new_trace)
 
     def _draw_trace(self, new_pos, new_trace=False):
@@ -652,6 +607,8 @@ class CopyDraw(AbstractParadigm):
         self.frame['trace_vertices'][self.frame['idx']+1] = new_pos
 
         if new_trace:
+            if self.verbose:
+                print('NEW TRACE')
             tr_i = int(self.frame['traces'][-1].replace('trace', '')) + 1
             tr_i_n = 'trace' + str(tr_i)
             self.frame['elements'][tr_i_n] = create_element(
@@ -692,6 +649,53 @@ class CopyDraw(AbstractParadigm):
                 break
             self.frame['idx'] += 1
 
+
+    def _create_trial_res(self, trace_let, trial_time, ptt, start_t_stamp,
+                          trace_let_pix, scale, cursor_t):
+        """ Creates the results dict that contains basic/essential trial info
+        to be saved. """
+
+        self.log.debug('Creating trial results')
+
+        # original data + metadata
+        self.trial_results = {'trace_let': trace_let, 'trial_time': trial_time,
+                              'ix_block': self.block_idx,
+                              'ix_trial': self.trial_idx, 'ptt': ptt,
+                              'start_t_stamp': start_t_stamp}
+
+        # new/extra metadata
+        if scale:
+            self.trial_results['scaling_matrix'] = self.stimuli['scaling_matrix']
+
+        self.trial_results['n_traces'] = len(self.frame['traces'])
+        self.trial_results['trial_duration'] = self.trial_settings['trial_duration']
+        self.trial_results['flip'] = self.stimuli['flip']
+        self.trial_results['the_box'] = self.frame['elements'][
+            'the_box'].vertices.copy()
+
+        self.trial_results['theBoxPix'] = self.frame['elements'][
+            'the_box'].verticesPix
+
+        self.trial_results['cursor_t'] = cursor_t
+
+        if (trace_let != trace_let_pix).any():
+            self.trial_results['pos_t_pix'] = trace_let_pix
+
+        # in matlab i think this is theRect
+        self.trial_results['winSize'] = self.win.size
+
+        self.trial_results['template'] = self.stimuli['current_stim']
+        stim_size = self.frame['elements']['template'].size
+        stim_pos = self.frame['elements']['template'].pos
+        self.trial_results['template_pix'] = convertToPix(self.stimuli['current_stim'],
+                                                          units='norm',
+                                                          pos=stim_pos,
+                                                          win=self.win)
+        self.trial_results['template_size'] = stim_size
+        self.trial_results['template_pos'] = stim_pos
+        # self.trial_results['templatePix'] = self.frame['elements'][
+        #     'template'].verticesPix
+        # do i need to add theWord? maybe - is the index enough?
 
 if __name__ == "__main__":
     try:
