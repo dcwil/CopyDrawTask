@@ -495,11 +495,12 @@ class CopyDraw(AbstractParadigm):
         # General TODO: --> how to deal with the jumps in terms of dtw...
         trace_let = np.concatenate([self.frame['elements'][tr_n].vertices.copy()
                                     for tr_n in self.frame['traces']])
-        trace_let_pix = np.concatenate([self.frame['elements'][tr_n].verticesPix.copy()
-                                        for tr_n in self.frame['traces']])
+        traces_pix = [self.frame['elements'][tr_n].verticesPix.copy()
+                      for tr_n in self.frame['traces']]
+        trace_let_pix = np.concatenate(traces_pix)
 
         self._create_trial_res(trace_let, trial_time, ptt, start_t_stamp,
-                               trace_let_pix, scale, cursor_t)
+                               trace_let_pix, scale, cursor_t, traces_pix)
 
     def exit(self):
         self.log.info('Exiting')
@@ -649,9 +650,8 @@ class CopyDraw(AbstractParadigm):
                 break
             self.frame['idx'] += 1
 
-
     def _create_trial_res(self, trace_let, trial_time, ptt, start_t_stamp,
-                          trace_let_pix, scale, cursor_t):
+                          trace_let_pix, scale, cursor_t, traces_pix):
         """ Creates the results dict that contains basic/essential trial info
         to be saved. """
 
@@ -666,7 +666,7 @@ class CopyDraw(AbstractParadigm):
         # new/extra metadata
         if scale:
             self.trial_results['scaling_matrix'] = self.stimuli['scaling_matrix']
-
+        self.trial_results['traces_pix'] = traces_pix
         self.trial_results['n_traces'] = len(self.frame['traces'])
         self.trial_results['trial_duration'] = self.trial_settings['trial_duration']
         self.trial_results['flip'] = self.stimuli['flip']

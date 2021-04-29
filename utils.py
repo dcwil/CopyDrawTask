@@ -148,12 +148,12 @@ def scale_to_norm_units(array,scaling_matrix=None):
     return scaled_matrix,scaling_matrix
 
 
-def scale_trace_to_template(trace, template):
+def scale_trace_to_template(trace, template, return_sf=False):
     """ NOTE, assumes the trace and template have the same starting position
     (just in different coord frames) which should be ensured via the code,
     but there have been bugs in the past changing this"""
     sf = template[0]/trace[0]
-    return trace*sf
+    return (trace*sf, sf) if return_sf else trace*sf
 
 
 def smooth(shape, return_df=False):
@@ -178,7 +178,7 @@ def smooth(shape, return_df=False):
     return df if return_df else df[['dxm','dym']].to_numpy()
 
 
-def simple_plot(arr, kind='plot'):
+def simple_plot(arr, kind='plot', label=None):
     """ given a 2d array plots it """
     assert arr.shape[1] == 2
     
@@ -186,7 +186,7 @@ def simple_plot(arr, kind='plot'):
     
     #figure()
     types = {'plot':plot,'scatter':scatter}
-    types[kind](arr[:,0],arr[:,1])
+    types[kind](arr[:,0],arr[:,1], label=label)
 
 
 def movingmean(arr, w_size):
@@ -276,3 +276,15 @@ def create_template_order(stimuli_dict, block_settings_dict):
             random.shuffle(order)
 
     return order
+
+
+def unnest(ls: list, final=None):
+    """ For flattening nested lists"""
+    if final is None:
+        final = []
+    if isinstance(ls, list):
+        for i in ls:
+            final = unnest(i, final=final)
+    else:
+        final.append(ls)
+    return final

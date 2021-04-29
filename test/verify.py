@@ -27,36 +27,12 @@ with open(opti_paths_path, 'rb') as h:
     opti_paths = pkl5.load(h)
 
 # Set to None and processed data will be collected and saved
-proc_scores_fname = 'new_scores_raw.pkl'
-
-# set to true if processing hasn't been done or needs to be overwritten
-process = False
-
-# do the processing (this is slowish, be aware)
-if process:
-    pro.process_session(path_to_session=session_dir,
-                        ignore=['processed'],
-                        legacy=True, ftype='mat')
-
-# Collect processed results
-if proc_scores_fname is None:
-    series_list = []
-
-    for block_path in session_dir.glob('copyDraw*block*'):
-        for proc_trial in block_path.glob('processed*pkl'):
-            se = pd.read_pickle(proc_trial)
-            series_list.append(se)
-
-    proc_df = pd.DataFrame(series_list)  # will need to separate the optimpath/w
-    proc_df.to_pickle('new_scores_raw.pkl')
-else:
-    proc_df = pd.read_pickle(Path('..', proc_scores_fname))
+proc_scores_fname = 'S7_scores_raw.pkl'
+proc_df = pd.read_pickle(Path('..', proc_scores_fname))
 
 # compare results - verification
 # go trial by trial
 rows_list = []
-# for ix_block in proc_df['ix_block']:
-#     for ix_trial in proc_df[proc_df['ix_block'] == ix_block]['ix_trial']:
 for i, df_row in proc_df.iterrows():
 
     ix_block = df_row['ix_block']
@@ -91,12 +67,21 @@ for i, df_row in proc_df.iterrows():
     for d in kindata:
         try:
             # still need to handle the accel issue
-            old_val = old_trial[d].values
-            new_val = new_trial[d].values
+            old_val = old_trial[d].values.astype(float)
+            new_val = new_trial[d].values.astype(float)
+
+            # handle missing dt division for accel in matlab
+            if 'acceleration' in d:
+                delta_t = new_trial['trial_time'].values / new_trial['trace_let'].values[0].shape[0]
+                if 'sub' in d:
+                    delta_t = delta_t * 3
+                old_val = old_val / delta_t
             check = check_with_tol(old_val, new_val).all()
         except ValueError:
-            old_val = old_trial[d].values[0]
-            new_val = new_trial[d].values[0]
+            old_val = old_trial[d].values[0].astype(float)
+            new_val = new_trial[d].values[0].astype(float)
+
+
             check = check_with_tol(old_val, new_val).all()
 
         if check:
@@ -140,7 +125,7 @@ for i, df_row in proc_df.iterrows():
     rows_list.append(row)
 
 checked_df = pd.DataFrame(rows_list)
-checked_df.to_pickle('checked_scores.pkl')
+checked_df.to_pickle('new_checked_scores.pkl')
 
 # p = results_dir / 'SAMPLE_SESSION' / 'SAMPLE_BLOCK'
 #

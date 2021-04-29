@@ -97,3 +97,25 @@ config file, yaml
 rename infor runs to output
 
 be able to run test_exp flow
+
+
+
+
+aggregated data ala scores_raw
+
+const dt
+
+pathlen investigate
+
+full matlab comparison figs
+
+last point dtw matching bad traces
+
+bad broken traces warning?
+
+LDA comparison
+
+
+
+
+

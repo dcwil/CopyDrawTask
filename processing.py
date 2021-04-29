@@ -49,7 +49,7 @@ def kin_scores(var_pos, delta_t, sub_sampled=False):
     kin_res['isj'] = np.mean(isj_)
     
     kin_res['speed_t'] = velocity * delta_t
-    kin_res['accel_t']= accel * delta_t ** 2
+    kin_res['accel_t'] = accel * delta_t ** 2
     kin_res['jerk_t'] = jerk * delta_t ** 3
     
     if sub_sampled:
@@ -64,7 +64,8 @@ def computeScoreSingleTrial(traceLet, template, trialTime, step_pattern='MATLAB'
     
     # compute avg delta_t
     delta_t = trialTime/traceLet.shape[0]
-    
+    # trial_results['delta_t'] = delta_t
+
     # Kinematic scores
     kin_res = kin_scores(traceLet, delta_t)
     trial_results = {**trial_results, **kin_res}
@@ -80,11 +81,16 @@ def computeScoreSingleTrial(traceLet, template, trialTime, step_pattern='MATLAB'
     dtw_res['pathlen'] = min([dtw_res['pathlen'], template.shape[0]])
     trial_results = {**trial_results, **dtw_res}
 
-    print(dtw_res['pathlen'])
     # misc
     # +1 on the pathlens bc matlab indexing
     # this is a horrible one-liner, it needs breaking up
-    trial_results['dist_t'] = np.sqrt(np.sum((template[trial_results['w'].astype(int)[:trial_results['pathlen']+1, 0], :] - trial_results['pos_t'][trial_results['w'].astype(int)[:trial_results['pathlen']+1, 1]])**2, axis=1))
+
+    w = trial_results['w'].astype(int)
+    pos_t = trial_results['pos_t']  # the trace
+    pathlen = trial_results['pathlen']
+    tmp1 = template[w[:pathlen + 1, 0], :]
+    tmp2 = pos_t[w[:pathlen + 1, 1]]
+    trial_results['dist_t'] = np.sqrt(np.sum((tmp1 - tmp2) ** 2, axis=1))
     
     # normalize distance dt by length of copied template (in samples)
     trial_results['dt_norm'] = trial_results['dt_l'] / (trial_results['pathlen']+1)
@@ -109,10 +115,15 @@ def save_processed_trial(res, trial_path, verbose=True):
     df.to_pickle(block_dir / fname)
 
 
-def process_trial(trial_path, legacy=False, sf=None):
+def process_trial(trial_path, legacy=False, sf=None, save=True):
     """ Actual trial post processing takes place here. Set legacy=True when
     processing old matlab data for verification etc. sf is scaling factor,
-     calculated from data if not given.
+     calculated from data if not given (not needed for legacy data, for current data
+     assumes that startpoint of template & trace are the same)
+
+     set save=False to return pandas series of trial, True to save series to pkl.
+
+
 
      When processing old matlab data be aware that template size is currently
       hardcoded (change this?)."""
@@ -154,7 +165,7 @@ def process_trial(trial_path, legacy=False, sf=None):
         res['ix_block'] = df.ix_block
         # both trace and template should have the same starting point
         # use this to scale things
-        sf = df.trace_let[0] / df.template[0] or sf
+        sf = sf or (df.trace_let[0] / df.template[0])
         scaled_template = df.template * sf
         res['scaled_template'] = scaled_template
         res['sf'] = sf
@@ -174,11 +185,14 @@ def process_trial(trial_path, legacy=False, sf=None):
 
     res = {**res, **scores, 'score': score}
 
-    save_processed_trial(res, trial_path)
+    if save:
+        save_processed_trial(res, trial_path)
+
+    return pd.Series(res)
 
 
-def process_session(path_to_session, ignore=None, ftype='pkl',
-                    legacy=False):
+def process_session(path_to_session, ignore=None, ftype='pkl', verbose: bool = True,
+                    legacy: bool = False, save: bool = False, compile: bool = True):
     """ Helper for looping over every trial in a block and every block in a
      session. Assumes any folders not passed in ignore are blocks (but it
      knows to ignore 'info_runs').
@@ -186,11 +200,14 @@ def process_session(path_to_session, ignore=None, ftype='pkl',
      Set legacy=True when processing matlab data for verification.
      """
 
+    save_individual = True if save and not compile else False
+
     session_dir = Path(path_to_session)
 
     # should this be written differently?
     ignore = ignore or []
     ignore.append('info_runs')
+    ignore.append('processed')
 
     print(f'processing {session_dir.name}')
 
@@ -201,13 +218,29 @@ def process_session(path_to_session, ignore=None, ftype='pkl',
     assert len(all_blocks) > 0, f'No blocks found in {session_dir}'
 
     # loop over blocks
+    session = []
     for block_path in all_blocks:
 
         # scoring each block and saving
-        process_block(block_path, ftype=ftype, legacy=legacy)
+        session.append(process_block(block_path, ftype=ftype, legacy=legacy, verbose=verbose, save=save_individual))
+
+    # compile and return compiled session
+    if not save and compile:
+        session = utils.unnest(session)
+        return pd.DataFrame(session)
+    # compile and save compiled session
+    elif save and compile:
+        session = utils.unnest(session)
+        df = pd.DataFrame(session)
+        df.to_pickle(f'{session_dir.name}_new_scores_raw.p')
+    # individual and save individual trials
+    elif save and not compile:
+        pass
+    elif not save and not compile:
+        return session
 
 
-def process_block(block_path, ftype='pkl', legacy=False, verbose=True):
+def process_block(block_path, ftype='pkl', legacy: bool = False, verbose: bool = True, save: bool = True):
     """ Helper for running process trial on each trial in a given block """
 
     if verbose:
@@ -215,5 +248,33 @@ def process_block(block_path, ftype='pkl', legacy=False, verbose=True):
 
     all_trials = [f for f in block_path.rglob(f'tscore*.{ftype}')]
 
+    block = []
     for trial_path in all_trials:
-        process_trial(trial_path, legacy=legacy)
+        block.append(process_trial(trial_path, legacy=legacy, save=save))
+
+    return block
+
+
+def compile_session(path_to_session=None, output_name=None, process=False, **kwargs):
+    """ for compiling a session into a single data structure (dataframe), processes trials if process is True,
+     otherwise it assumes they have been processed. Remember to pass important args for process session: legacy,
+      ignore, ftype etc"""
+
+    if not isinstance(path_to_session, Path):
+        path_to_session = Path(path_to_session)
+
+    if process:
+        process_session(path_to_session=path_to_session, **kwargs)
+
+    series_list = []
+
+    for block_path in path_to_session.glob('copyDraw*block*'):
+        for proc_trial in block_path.glob('processed*pkl'):
+            se = pd.read_pickle(proc_trial)
+            series_list.append(se)
+
+    if output_name is None:
+        output_name = f'{path_to_session.name}_scores_raw.pkl'
+
+    proc_df = pd.DataFrame(series_list)  # will need to separate the optimpath/w
+    proc_df.to_pickle(output_name)

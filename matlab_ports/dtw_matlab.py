@@ -54,7 +54,6 @@ def dtw_matlab(s, t, *args, w=float('inf')):  # s is trace, t is template
         
             D[i+1, j+1] = oost + min([D[i, j], D[i+1, j], D[i, j+1]])
 
-    # print(i,j,D.shape,s.shape,t.shape)
     idx_min = np.argmin(C[-1, 1:]) if ns >= nt else np.argmin(C[1:, -1])
     
     d = D[-1, -1]
