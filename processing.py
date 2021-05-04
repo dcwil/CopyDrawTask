@@ -78,19 +78,14 @@ def computeScoreSingleTrial(traceLet, template, trialTime, step_pattern='MATLAB'
     
     # dtw
     dtw_res = dtw_py.dtw_features(traceLet, template, step_pattern=step_pattern)
-    dtw_res['pathlen'] = min([dtw_res['pathlen'], template.shape[0]])
+    # dtw_res['pathlen'] = min([dtw_res['pathlen'], template.shape[0]])
     trial_results = {**trial_results, **dtw_res}
 
     # misc
-    # +1 on the pathlens bc matlab indexing
-    # this is a horrible one-liner, it needs breaking up
-
-    w = trial_results['w'].astype(int)
-    pos_t = trial_results['pos_t']  # the trace
-    pathlen = trial_results['pathlen']
-    tmp1 = template[w[:pathlen + 1, 0], :]
-    tmp2 = pos_t[w[:pathlen + 1, 1]]
-    trial_results['dist_t'] = np.sqrt(np.sum((tmp1 - tmp2) ** 2, axis=1))
+    trial_results['dist_t'] = _w_to_dist_t(trial_results['w'].astype(int),
+                                           trial_results['pos_t'],
+                                           template,
+                                           trial_results['pathlen'])
     
     # normalize distance dt by length of copied template (in samples)
     trial_results['dt_norm'] = trial_results['dt_l'] / (trial_results['pathlen']+1)
@@ -99,6 +94,41 @@ def computeScoreSingleTrial(traceLet, template, trialTime, step_pattern='MATLAB'
     trial_results['len'] = (trial_results['pathlen']+1) / len(template)
     
     return trial_results
+
+
+def _w_to_dist_t(w, trace, template, pathlen, template_idx_in_w: int = 0):
+    """ This is a copy of how dist_t is computed in matlab.
+
+    with the added feature of informing it as to whether w is indexed the other way  ie [trace_idxs, template_idxs]
+    """
+
+    tmp1 = template[w[:pathlen, template_idx_in_w], :]
+    tmp2 = trace[w[:pathlen, int(not template_idx_in_w)]]
+    dist_t = np.sqrt(np.sum((tmp1 - tmp2) ** 2, axis=1))
+    return dist_t
+
+
+def early_stop(w, trace, template, template_idx_in_w=0):
+    # for all dtw-python the first column of w corresponds to template
+    last_idx_template = template.shape[0] - 1
+
+    # Get the idxs of points that matched with the last template point
+    matches_with_last_idxs = np.where(w[:, template_idx_in_w] == last_idx_template)[0]
+
+    if len(matches_with_last_idxs) > 1:
+        # do some truncating
+        dist_t = _w_to_dist_t(w, trace, template, None,
+                              template_idx_in_w=template_idx_in_w)  # using None because we want dists for all points
+
+        matched_cutoff_idx = dist_t[matches_with_last_idxs].argmin()
+        cutoff_idx = matches_with_last_idxs[matched_cutoff_idx]
+        w = w[:cutoff_idx]
+    else:
+        # only one or no points matched with last template point
+        pass
+
+    return w
+
 
 # processing sessions/blocks/trials
 
@@ -193,12 +223,24 @@ def process_trial(trial_path, legacy=False, sf=None, save=True):
 
 def process_session(path_to_session, ignore=None, ftype='pkl', verbose: bool = True,
                     legacy: bool = False, save: bool = False, compile: bool = True):
-    """ Helper for looping over every trial in a block and every block in a
-     session. Assumes any folders not passed in ignore are blocks (but it
-     knows to ignore 'info_runs').
+    """
 
-     Set legacy=True when processing matlab data for verification.
-     """
+    :param path_to_session: path to the session
+    :param ignore: list of directories to be ignored ('info_runs' & 'processed') are ignored by default
+    :param ftype: file ending to look for when filtering for trials. Set to mat if processing legacy data
+    :param verbose: enable verbose printing
+    :param legacy: set to true if processing legacy data (changes processing pipeline for each trial)
+    :param save: if True, saves the data either as individual trials or one compiled dataframe, else just returns it
+    :param compile: if True compiles data into a single dataframe
+    """
+    # """ Helper for looping over every trial in a block and every block in a
+    #  session. Assumes any folders not passed in ignore are blocks ( 'info_runs' & 'processed' are ignored
+    #  by default).
+    #
+    #  Set legacy=True when processing matlab data for verification.
+    #
+    #  com
+    #  """
 
     save_individual = True if save and not compile else False
 
@@ -232,10 +274,10 @@ def process_session(path_to_session, ignore=None, ftype='pkl', verbose: bool = T
     elif save and compile:
         session = utils.unnest(session)
         df = pd.DataFrame(session)
-        df.to_pickle(f'{session_dir.name}_new_scores_raw.p')
+        df.to_pickle(f'{session_dir.name}_scores_raw.p')
     # individual and save individual trials
     elif save and not compile:
-        pass
+        pass  # this is already done via save_individual
     elif not save and not compile:
         return session
 

@@ -7,7 +7,6 @@ Created on Mon Mar  1 11:55:44 2021
 
 from dtw import *
 from matlab_ports.dtw_matlab import dtw_matlab
-
 import numpy as np
 
 
@@ -33,3 +32,5 @@ def dtw_features(trace, template, step_pattern='MATLAB'):
         res['pathlen'] = min([pathlen, template.shape[0]])  # bug in matlab code here, chooses wrong template axis
         
     return res
+
+
